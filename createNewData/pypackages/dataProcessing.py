@@ -1,6 +1,3 @@
-from typing import ClassVar
-
-
 import urllib
 
 class UrlHandler(object):

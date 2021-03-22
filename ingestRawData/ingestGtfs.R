@@ -60,13 +60,14 @@ data <- list()
 # Get a vector of file names that have been unzipped
 files <- list.files('ingestRawData/raw/')
 
-# Loop through and add each file to the list
+# Loop through and add each file as an element to the list
 for (file in 1:length(files)){
   file <- files[file]
   table_name <- gsub('.txt', '', file)
   data_add <- read.table(paste0('ingestRawData/raw/', file), sep = ',', header = TRUE)
-  names(data_add) <- gsub('ï..', '', names(data_add))
-  data[[table_name]] <- data_add  
+  names(data_add) <- gsub('ï..', '', names(data_add)) # Clean any strange chars that import with field name
+  data[[table_name]] <- data_add
+  rm(data_add, table_name, file)
 }
 
 

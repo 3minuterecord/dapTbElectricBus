@@ -39,5 +39,6 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 
-# Raw data too large for git repo
+# Ignore ingested raw data (too large for repo)
 ingestRawData/raw
+

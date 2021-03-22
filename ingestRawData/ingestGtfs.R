@@ -14,3 +14,7 @@ download.file(
   url = file, 
   destfile = 'C:/MyApps/dapTbElectricDublinBus/ingestRawData/gtfs.zip'
 )
+
+unzip(
+  'C:/MyApps/dapTbElectricDublinBus/ingestRawData/gtfs.zip',
+  exdir = 'ingestRawData/raw')

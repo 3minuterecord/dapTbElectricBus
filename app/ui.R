@@ -1,7 +1,7 @@
 source('global.R')
 library(shinyalert)
 
-header <- dashboardHeader(title = "NCI DAP Team B", titleWidth = 220)
+header <- dashboardHeader(title = "DAP Team B Group Project", titleWidth = 220)
 
 sidebar <- dashboardSidebar(
   useShinyjs(), 

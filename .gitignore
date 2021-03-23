@@ -42,3 +42,5 @@ vignettes/*.pdf
 # Ignore ingested raw data (too large for repo)
 ingestRawData/raw
 
+# Other
+README.html

@@ -12,7 +12,7 @@ sidebar <- dashboardSidebar(
   width=220,
   sidebarMenu(
     br(),
-    div(img(src="bus-front.svg"), style="margin-top: 10px; margin-left: 13px; margin-right: 110px; margin-bottom: 10px;"),
+    div(img(src="bus-front-green.svg"), style="margin-top: 10px; margin-left: 13px; margin-right: 110px; margin-bottom: 10px;"),
     br(),
     menuItem("Analysis", tabName = "analysis", icon = icon("superpowers")),
     br(),

@@ -8,8 +8,11 @@ shinyServer(function(input, output, session) {
   
   conPool <- getDbPool(DATABASE)
   
+  map_class <- reactiveValues(class = NULL)
+  
   output$showMainBusMap <- renderUI({
-    div(leafletOutput("busGeoMap"), class = 'map-box')
+    req(tripShapes())
+    div(leafletOutput("busGeoMap"), class = map_class$class)
   })
   
   
@@ -65,6 +68,7 @@ shinyServer(function(input, output, session) {
           opacity = 1
         )
     }
+    map_class$class <- 'map-box'
     return(outputMap)
   })
 })

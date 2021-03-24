@@ -1,7 +1,7 @@
 library(rsconnect)
 
 rsconnect::deployApp(appDir = "app",
-                     appFiles = c('password.json', 'global.R', 'Server.R', 'ui.R',' www'),
+                     appFiles = c('password.json', 'global.R', 'Server.R', 'ui.R','www'),
                      account = "orb10x",
                      server = "shinyapps.io",
                      appName = "dapTbElectricBus",

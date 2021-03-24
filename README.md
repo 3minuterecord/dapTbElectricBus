@@ -5,6 +5,7 @@ Visualization of factors affecting the feasibility of transitioning the Dublin B
 **App** (under development)  
 https://orb10x.shinyapps.io/dapTbElectricBus/
   
+![app_snap](app/www/screen1.PNG)
   
 #### GTFS Notes
 

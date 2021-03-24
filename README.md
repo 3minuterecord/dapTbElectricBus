@@ -1,4 +1,5 @@
 ## dapTbElectricDublinBus
+
 Visualization of factors affecting the feasibility of transitioning the Dublin Bus network to electric buses.
 
 **stops** - stops where vehicles pick up or drop off passengers  
@@ -8,3 +9,16 @@ Visualization of factors affecting the feasibility of transitioning the Dublin B
 **stop_times** - times that a vehicle arrives at and departs from stops for each trip  
 **calendar** - Service dates specified using a weekly schedule with start and end dates  
 **shapes** - rules for mapping vehicle travel paths  
+
+
+#### SME Notes
+
+- Azure Maps for elevations, driving distance between two points & driving time between two points (if both are unknown).  
+- For the first & last deadhead (from depot to first stop, and returning from last stop to depot) we get time and distance.
+- For deadheads in-between trips, we already have time from GTFS so we just get distance.  
+- We only get elevations for every "stop" and the depot
+- We create weight over time and doors-open over time
+- Also set the weight to zero for deadheads
+- The shapes for journeys between stops are very detailed (every few metres)
+- Toute between two stops isn't exactly the same every time
+- Could for every point in the shapes or so some kind of spatial downsampling 

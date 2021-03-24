@@ -43,4 +43,4 @@ body <- dashboardBody(
   )
 )
 
-dashboardPage(title = "Team B", header, sidebar, body, skin = "green")
+dashboardPage(title = "DAP Team B Project", header, sidebar, body, skin = "green")

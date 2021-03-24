@@ -42,6 +42,8 @@ vignettes/*.pdf
 # Ignore ingested raw data (too large for repo)
 ingestRawData/raw
 
+# Ignore rsconnect for now
+rsconnect
 # Other
 README.html
 

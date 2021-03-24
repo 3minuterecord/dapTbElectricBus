@@ -399,3 +399,9 @@ input[type='radio']:checked:after {
   display: inline-block;
   vertical-align: top;
 }
+
+.map-box{
+  margin-left: 15px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.2), 0 2px 5px 0 rgba(0, 0, 0, 0.19);
+}

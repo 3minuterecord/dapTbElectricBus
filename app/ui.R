@@ -31,9 +31,10 @@ body <- dashboardBody(
             collapsible = TRUE,
             solidHeader = TRUE,
             status = "primary",
+            br(),
             fluidRow(
-              column(12,
-                div()
+              column(6,
+                div(uiOutput('showMainBusMap'))
               )
             ),
             br(), br(), br(), br(), br(), br(), br(), br()

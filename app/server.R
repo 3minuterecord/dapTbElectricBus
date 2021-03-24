@@ -20,7 +20,7 @@ shinyServer(function(input, output, session) {
   tripShapes <- reactive({
     con <- poolCheckout(conPool)
     # Get the latest count
-    query <- "SELECT shape_pt_lat, shape_pt_lon FROM shapes"
+    query <- "SELECT shape_id, shape_pt_lat, shape_pt_lon FROM shapes"
     data <- DBI::dbGetQuery(con, query)
     poolReturn(con)
     return(data)
@@ -47,27 +47,36 @@ shinyServer(function(input, output, session) {
     
     # Add trip shape
     tripShapesData <- tripShapes()
-    tripIds  <- names(tripShapesData)
-   
+    tripIds  <- unique(tripShapesData$shape_id)
+    
     # Create color palette for list of trips.
     pal <- colorFactor(viridis(length(tripIds)), unlist(tripIds))
-    for (id in tripIds){
-      latitudes <- tripShapesData$shape_pt_lat
-      longitudes <- tripShapesData$shape_pt_lon
-      tripPlotData <- data.frame(lats = c(unlist(latitudes)), lons = c(unlist(longitudes)))
-      # trip shape plot.
-      outputMap <- outputMap %>%
-        addPolylines(
-          data = tripPlotData,
-          lat = ~lats,
-          lng = ~lons,
-          label = 'Trip-'%+% id,
-          color = '#B4DA86',
-          #color = ~pal(id),
-          weight = 2,
-          opacity = 1
-        )
-    }
+    
+    j = 1
+    withProgress(message = 'Loading shapes...', value = 0, {
+      for (id in tripIds){
+        incProgress(1/length(tripIds), detail = paste(j, " of ", length(tripIds)))
+        j = j + 1
+        coords <- tripShapesData %>% 
+          filter(shape_id == id)
+          
+        latitudes <- coords$shape_pt_lat
+        longitudes <- coords$shape_pt_lon
+        tripPlotData <- data.frame(lats = c(unlist(latitudes)), lons = c(unlist(longitudes)))
+        # trip shape plot.
+        outputMap <- outputMap %>%
+          addPolylines(
+            data = tripPlotData,
+            lat = ~lats,
+            lng = ~lons,
+            label = 'Trip-'%+% id,
+            #color = '#B4DA86',
+            color = ~pal(id),
+            weight = 2,
+            opacity = 1
+          )
+      }
+    })
     map_class$class <- 'map-box'
     return(outputMap)
   })

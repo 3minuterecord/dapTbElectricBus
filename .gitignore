@@ -47,5 +47,6 @@ rsconnect
 # Other
 README.html
 
-# Passwords
+# Local passwords & keys
 password.json
+keys.json

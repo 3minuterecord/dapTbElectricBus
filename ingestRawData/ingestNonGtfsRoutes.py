@@ -48,6 +48,7 @@ else:
    print("Error in the HTTP request")
 
 # Save raw data to Azure Cosmos DB for MongoDB API
+# ================================================
 # Azure Cosmos DB service implements wire protocols for common NoSQL APIs including Cassandra, MongoDB. 
 # This allows you to use your familiar NoSQL client drivers and tools to interact with your Cosmos database.
 from pymongo import MongoClient

@@ -17,6 +17,7 @@ filepath = 'keys.json'
 with open(filepath) as json_file:
     key_data = json.load(json_file)
     subscription_key = key_data['subscription_key']  
+    cosmos_key = key_data['cosmos_key']  
     print(subscription_key)
 
 api_version = '1.0'
@@ -47,12 +48,12 @@ if response.status_code == 200:
 else:   
    print("Error in the HTTP request")
 
-# Save raw data to Azure Cosmos DB for MongoDB API
+# Save Raw Data to Azure Cosmos DB for MongoDB API
 # ================================================
 # Azure Cosmos DB service implements wire protocols for common NoSQL APIs including Cassandra, MongoDB. 
 # This allows you to use your familiar NoSQL client drivers and tools to interact with your Cosmos database.
 from pymongo import MongoClient
-uri = "mongodb://electric-bus-cosmos-east-us:tsz17HxALAfB62dTxIrNkR6bJIYraYFTljK6KzsBK60o462GOhWcxOvLxuXxQnesq5EXvx9loYum6h1MtSKhYg==@electric-bus-cosmos-east-us.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&replicaSet=globaldb&maxIdleTimeMS=120000&appName=@electric-bus-cosmos-east-us@"
+uri = "mongodb://electric-bus-cosmos-east-us:" + cosmos_key + "@electric-bus-cosmos-east-us.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&replicaSet=globaldb&maxIdleTimeMS=120000&appName=@electric-bus-cosmos-east-us@"
 client = MongoClient(uri)
 # Create database
 db = client['bus_routes_nosql']

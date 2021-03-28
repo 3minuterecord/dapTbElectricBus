@@ -15,20 +15,38 @@ shinyServer(function(input, output, session) {
     div(leafletOutput("busGeoMap"), class = map_class$class)
   })
   
+  # Get route data
+  routeData <- reactive({
+    con <- poolCheckout(conPool)
+    query <- "SELECT * FROM bus_routes"
+    data <- DBI::dbGetQuery(con, query)
+    poolReturn(con)
+    return(data)
+  })
   
   # Get trip_shapes lat and lon json
   tripShapes <- reactive({
     con <- poolCheckout(conPool)
-    # Get the latest count
     query <- "SELECT shape_id, shape_pt_lat, shape_pt_lon FROM shapes"
     data <- DBI::dbGetQuery(con, query)
     poolReturn(con)
     return(data)
   })
   
+  output$showRouteSelector <- renderUI({
+    routes <- unique(routeData()$route_id)
+    selectInput(
+      'selected_route',
+      'Route',
+      choices = routes,
+      width = 150
+    )
+  })
+  
   
   # Bus Geo Map.
   output$busGeoMap <- renderLeaflet({
+    req(input$selected_route)
     outputMap <- leaflet() %>%
       addFullscreenControl(position = "topleft", pseudoFullscreen = FALSE) %>%
       addProviderTiles("OpenStreetMap.Mapnik", group = "OpenStreetMap") %>%

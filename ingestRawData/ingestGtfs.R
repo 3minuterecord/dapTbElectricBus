@@ -181,6 +181,6 @@ for (i in 1:length(names(data))){
 }
 
 # Get the latest count
-query <- "SELECT * FROM routes"
+query <- "SELECT * FROM bus_routes"
 pull_data <- DBI::dbGetQuery(con, query)
 poolReturn(con)

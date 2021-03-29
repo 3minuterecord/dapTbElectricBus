@@ -1,5 +1,12 @@
-from pyPackages.urlHandler import UrlHandler as elevation
+import sys
+import os
+print(os.environ.get("PYTHONPATH"))
+sys.path.append(os.environ.get("PYTHONPATH"))
 
+import createNewData.data.config as in_config
+from createNewData.pyPackages.Azure import Azure
 
-a = elevation().mineElevationData()
-print(a)
+SqlDataCursor = Azure(in_config).AzureDBConnect()
+
+print(SqlDataCursor)
+SqlDataCursor.close()

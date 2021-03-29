@@ -1,6 +1,7 @@
 import urllib
 import json
 import createNewData.data.config as in_config
+import pyodbc
 
 class UrlHandler():
     def __init__(self, locations):
@@ -9,7 +10,7 @@ class UrlHandler():
         if callargs == "Call URL":
             "do something in the URL"
     
-    def generateLocationBody(self):
+    def generateLocationRequest(self):
         print("generate the body here from the dataframe.")
     
     def callURL(self, url, body):
@@ -38,4 +39,4 @@ class UrlHandler():
         jsonReadyData = response.read().decode('utf8').replace("'", '"')
         elevationData = json.loads(jsonReadyData)
         s = json.dumps(elevationData, indent=4, sort_keys=True)
-        print(s)
+        return s

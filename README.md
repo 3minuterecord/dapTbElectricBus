@@ -8,3 +8,12 @@ block - a collection of trips undertaken by a single bus and driver before going
 stop_times - times that a vehicle arrives at and departs from stops for each trip
 calendar - Service dates specified using a weekly schedule with start and end dates
 shapes - rules for mapping vehicle travel paths
+Python elevation package prerequisites:
+
+Set system variables for:
+    1. SQL Password
+    2. SQL User
+    3. SQL Database Name
+    4. SQL Server Name
+    5. SQL Driver
+    6. PYTHONPATH for package directory

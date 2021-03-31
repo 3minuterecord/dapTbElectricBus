@@ -12,7 +12,7 @@ sidebar <- dashboardSidebar(
   width=220,
   sidebarMenu(
     br(),
-    div(img(src="bus-front-green.svg"), style="margin-top: 10px; margin-left: 13px; margin-right: 110px; margin-bottom: 10px;"),
+    div(img(src="bus-front-green-exp.svg"), style="margin-top: 10px; margin-left: 13px; margin-right: 110px; margin-bottom: 10px;"),
     br(),
     menuItem("Analysis", tabName = "analysis", icon = icon("superpowers")),
     br(),
@@ -31,10 +31,15 @@ body <- dashboardBody(
             collapsible = TRUE,
             solidHeader = TRUE,
             status = "primary",
-            div(uiOutput('showRouteSelector'), style = 'margin-left: 14px; margin-top: 5px;'),
+            div(uiOutput('showRouteSelectorControls'), style = 'margin-left: 14px; margin-top: 5px;'),
             fluidRow(
               column(6,
                 div(uiOutput('showMainBusMap'))
+              )
+            ),
+            fluidRow(
+              column(12,
+                div(uiOutput('showTripTable'))
               )
             ),
             br(), br(), br(), br(), br(), br(), br(), br()

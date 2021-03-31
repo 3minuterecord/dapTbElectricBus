@@ -7,7 +7,6 @@ from createNewData.pypackages.Azure import Azure
 
 AzurePackage = Azure(in_config)
 
-SqlDataCursor = AzurePackage("SelectDistinct",
-                              "shape_id",
-                              "[dbo].[shapes]")
-print(SqlDataCursor)
+SqlDataCursor = AzurePackage("UploadToSQL", 
+                              in_config.shapes,
+                              in_config.shapesname[0])

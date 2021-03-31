@@ -12,3 +12,12 @@ CREATE TABLE stops (
   shape_pt_sequence,
   shape_dist_traveled
 );
+
+CREATE INDEX idx_trip_id
+ON trips (trip_id);
+
+CREATE INDEX idx_route_id
+ON trips (route_id);
+
+CREATE INDEX idx_shape_id
+ON shapes (shape_id);

@@ -26,6 +26,16 @@ shinyServer(function(input, output, session) {
     return(data$route_short_name)
   })
   
+  stops <- reactive({
+    con <- poolCheckout(conPool)
+    query <- paste0("SELECT s.arrival_time, s.departure_time, s.stop_id 
+    FROM trips t LEFT JOIN stop_times s ON t.trip_id = s.trip_id WHERE t.trip_id IN (",
+    paste0(sprintf("'%s'", unique(tripDetails()$trip_id)), collapse = ', '), ")")
+    data <- DBI::dbGetQuery(con, query)
+    poolReturn(con)
+    return(data)
+  })
+  
   # Create UI elements for selecting route to visualize
   output$showRouteSelectorControls <- renderUI({
     div(
@@ -207,7 +217,7 @@ shinyServer(function(input, output, session) {
     data <- data #%>%
       #select(-id, -Asset, -System, -UserID, -Notes_Flag, -group, -Detection_Agent, -content) %>%
       #select(Location, Structure, Agent_Focus, start, end, Predicted, Reviewed, notes)
-    
+    print(stops())
     reactable(
       data,
       filterable = FALSE,

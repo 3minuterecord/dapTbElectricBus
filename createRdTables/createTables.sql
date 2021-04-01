@@ -21,3 +21,6 @@ ON trips (route_id);
 
 CREATE INDEX idx_shape_id
 ON shapes (shape_id);
+
+CREATE INDEX idx_trip_id
+ON stop_times (trip_id);

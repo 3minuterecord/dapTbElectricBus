@@ -27,12 +27,25 @@ shinyServer(function(input, output, session) {
   })
   
   stops <- reactive({
+    req(input$selected_route)
     con <- poolCheckout(conPool)
-    query <- paste0("SELECT s.arrival_time, s.departure_time, s.stop_id 
+    query <- paste0("SELECT t.route_id, t.trip_id, t.service_id, s.arrival_time, s.departure_time, 
+    s.stop_id, s.stop_headsign, s.shape_dist_traveled, t.direction_id  
     FROM trips t LEFT JOIN stop_times s ON t.trip_id = s.trip_id WHERE t.trip_id IN (",
-    paste0(sprintf("'%s'", unique(tripDetails()$trip_id)), collapse = ', '), ")")
+    paste0(sprintf("'%s'", unique(tripDetails()$trip_id)), collapse = ', '), ") AND t.service_id = 'y1003#1'")
     data <- DBI::dbGetQuery(con, query)
     poolReturn(con)
+    
+    # Create quasi block number data based on departure time diffs
+    data$quasi_block <- c(0, diff(toSeconds(data$departure_time)))
+    data$quasi_block <- ifelse(data$quasi_block < 0, 1, 0) 
+    bounds <- length(data$quasi_block[data$quasi_block == 1])
+    data$quasi_block[data$quasi_block == 1] <- (2:(bounds + 1))
+    data$quasi_block[1] <- 1
+    data$quasi_block <- ifelse(data$quasi_block == 0, NA, data$quasi_block)
+    data$quasi_block <- zoo::na.locf(data$quasi_block)
+    data <- data 
+    
     return(data)
   })
   
@@ -63,14 +76,44 @@ shinyServer(function(input, output, session) {
           'last_route',
           'Back',
           width = 70
-        ), style = 'display: inline-block; margin-left: 10px; margin-top: 25px; vertical-align: top;'
+        ), style = 'display: inline-block; margin-left: 10px; margin-top: 26px; vertical-align: top;'
       ),
       div(
-       actionButton(
-         'next_route',
-         'Next',
-         width = 70
-       ), style = 'display: inline-block; margin-left: 10px; margin-top: 25px; vertical-align: top;'
+        actionButton(
+          'next_route',
+          'Next',
+          width = 70
+        ), style = 'display: inline-block; margin-left: 10px; margin-top: 26px; vertical-align: top;'
+      )
+    )
+  })
+  
+  # Create UI elements for selecting route to visualize
+  output$showBlockSelectorControls <- renderUI({
+    div(
+      div(
+        selectInput(
+          'selected_block',
+          'Block',
+          choices = unique(stops()$quasi_block),
+          #selected = routesVector()[routeVectorCounter$num],
+          width = 100
+        ), style = 'display: inline-block; margin-left: 15px;'
+      ),
+      # Create forward and back buttons for faster navigation through the list of routes
+      div(
+        actionButton(
+          'last_block',
+          'Back',
+          width = 70
+        ), style = 'display: inline-block; margin-left: 10px; margin-top: 26px; vertical-align: top;'
+      ),
+      div(
+        actionButton(
+          'next_block',
+          'Next',
+          width = 70
+        ), style = 'display: inline-block; margin-left: 10px; margin-top: 26px; vertical-align: top;'
       )
     )
   })
@@ -116,6 +159,45 @@ shinyServer(function(input, output, session) {
         session = session
       )
       routeVectorCounter$num <- routeVectorCounter$num - 1  
+    }
+  })
+  
+  blockVectorCounter <- reactiveValues(num = 1)
+  
+  observeEvent(input$selected_block, {
+    index <- which(unique(stops()$quasi_block) == input$selected_block)
+    if (abs(index - blockVectorCounter$num) != 0) {
+      blockVectorCounter$num <- index  
+    }
+  })
+  
+  # If the next button is pressed, update the drop down selected & increase the counter by 1
+  # As long as you are not at the end of the list
+  observeEvent(input$next_block, {
+    if (blockVectorCounter$num != length(unique(stops()$quasi_block))){
+      updateSelectInput(
+        'selected_block',
+        'Block',
+        choices = unique(stops()$quasi_block),
+        selected = unique(stops()$quasi_block)[blockVectorCounter$num + 1], 
+        session = session
+      )
+      blockVectorCounter$num <- blockVectorCounter$num + 1  
+    }
+  })
+  
+  # If the back button is pressed, udpate the drop down selected & decrease the counter by 1
+  # As long as you are not at the start of the lis
+  observeEvent(input$last_block, {
+    if (blockVectorCounter$num != 1){
+      updateSelectInput(
+        'selected_route',
+        'Block',
+        choices = unique(stops()$quasi_block),
+        selected = unique(stops()$quasi_block)[blockVectorCounter$num - 1], 
+        session = session
+      )
+      blockVectorCounter$num <- blockVectorCounter$num - 1  
     }
   })
   
@@ -202,6 +284,7 @@ shinyServer(function(input, output, session) {
   output$showMainBusMap <- renderUI({
     req(input$selected_route)
     req(shapeData())
+    req(input$selected_block)
     div(leafletOutput("busGeoMap"), class = map_class$class)
   })
   
@@ -212,12 +295,10 @@ shinyServer(function(input, output, session) {
   
   # Create reactable table view of trips for selected route
   output$tripTable <- reactable::renderReactable({
-    data <- tripDetails()
+    req(input$selected_block)
+    data <- stops() %>% filter(quasi_block == input$selected_block)
     if(is.null(data)){return(NULL)}
-    data <- data #%>%
-      #select(-id, -Asset, -System, -UserID, -Notes_Flag, -group, -Detection_Agent, -content) %>%
-      #select(Location, Structure, Agent_Focus, start, end, Predicted, Reviewed, notes)
-    print(stops())
+    
     reactable(
       data,
       filterable = FALSE,

@@ -31,7 +31,8 @@ body <- dashboardBody(
             collapsible = TRUE,
             solidHeader = TRUE,
             status = "primary",
-            div(uiOutput('showRouteSelectorControls'), style = 'margin-left: 14px; margin-top: 5px;'),
+            div(uiOutput('showRouteSelectorControls'), style = 'margin-left: 14px; margin-top: 5px; display: inline-block;'),
+            div(uiOutput('showBlockSelectorControls'), style = 'margin-left: 14px; margin-top: 5px; display: inline-block;'),
             fluidRow(
               column(6,
                 div(uiOutput('showMainBusMap'))

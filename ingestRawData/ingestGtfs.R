@@ -180,7 +180,16 @@ for (i in 1:length(names(data))){
   }
 }
 
-# Get the latest count
-query <- "SELECT * FROM bus_routes"
-pull_data <- DBI::dbGetQuery(con, query)
+
+# Bus Depot Coordinates
+# Coordinates from Google Maps pins
+depots <- data.frame(
+  name = c('Ringsend', 'Sumerhill', 'Simmonscourt', 'Conyngham'),
+  lat = c(53.34467535286916, 53.357791006125375, 53.31966245934526, 53.350004073703836),
+  lon = c(-6.233444586417399, -6.255073919093893, -6.232071295453812, -6.302624118708089)
+)
+DBI::dbWriteTable(con, name = 'depots', value = depots, overwrite = TRUE)  
+
+depot_mappings <- read.csv('C:/MyApps/dapTbElectricDublinBus/ingestRawData/depot_mapping.csv', stringsAsFactors = F)
+
 poolReturn(con)

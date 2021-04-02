@@ -336,8 +336,7 @@ shinyServer(function(input, output, session) {
           data = df, lng = ~lon, lat = ~lat,
           label = 'start/end',
           icon = awesomeIcons(
-            icon = 'radio-button-on',
-            library = 'ion',
+            text = 'R',
             markerColor = 'green',
             iconColor = 'white'
             )

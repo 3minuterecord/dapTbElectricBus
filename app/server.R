@@ -47,10 +47,12 @@ shinyServer(function(input, output, session) {
   stops <- reactive({
     req(input$selected_route)
     con <- poolCheckout(conPool)
+    #selected_service <- 'y1002#1'
+    selected_service <- unique(tripsData()$service_id[1])
     query <- paste0("SELECT t.route_id, t.trip_id, t.service_id, s.arrival_time, s.departure_time, 
     s.stop_id, s.stop_headsign, s.shape_dist_traveled, t.direction_id  
     FROM trips t LEFT JOIN stop_times s ON t.trip_id = s.trip_id WHERE t.trip_id IN (",
-    paste0(sprintf("'%s'", unique(tripsData()$trip_id)), collapse = ', '), ") AND t.service_id = '", unique(tripsData()$service_id[1]), "'")
+    paste0(sprintf("'%s'", unique(tripsData()$trip_id)), collapse = ', '), ") AND t.service_id = '", selected_service, "'")
     data <- DBI::dbGetQuery(con, query)
     poolReturn(con)
     if(nrow(data) != 0){
@@ -366,6 +368,60 @@ shinyServer(function(input, output, session) {
     req(shapeData())
     req(input$selected_block)
     div(leafletOutput("busGeoMap"), class = map_class$class)
+  })
+  
+  output$showRoutePlots <- renderUI({
+    div(plotlyOutput('distancePlot'), style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;')
+  })
+  
+  output$distancePlot <- renderPlotly({
+    req(input$selected_block)
+    data <- stops() %>% filter(quasi_block == input$selected_block)  
+    
+    # TODO -- handling for times greater than 24 hrs, e.g., 28:30:00
+    data <- data %>%
+      mutate(time_axis = as.POSIXct(paste0('2021-03-01', departure_time), format = "%Y-%M-%d %H:%M:%S")) %>%
+      mutate(distance = shape_dist_traveled)
+    data$distance <- c(0, diff(data$distance))
+    data$distance[data$distance < 0] <- 0
+    data$distance <- cumsum(data$distance) / 1000
+    p <- plot_ly(
+      data, 
+      x = ~time_axis, 
+      y = ~distance, 
+      type = 'scatter', 
+      mode = 'lines',
+      height = 230, 
+      name = 'Distance',
+      line = list(color = '#1C2D38'),
+      hoverinfo = 'text', 
+      text = ~paste0(round(distance, 1), " km @ ", format(time_axis, '%H:%M'))
+      )
+    
+    p <- p %>% add_trace(
+      x = ~max(time_axis), 
+      y = ~max(distance), 
+      type = 'scatter',
+      mode = 'text', 
+      text = ~paste0("<b> ", round(max(distance), 1), 'km <b>'), 
+      textposition = 'right',
+      textfont = list(color = '#000000', size = 13)
+    )
+    
+    p <- p %>% layout(
+      title = "",
+      yaxis = list(title = list(text = '<b>Distance (km)</b>',  standoff = 20L),
+      rangemode = "nonnegative"),
+      showlegend = FALSE,
+      font = list(size = 11),
+      xaxis = list(
+        title = '',
+        range = c(min(data$time_axis), max(data$time_axis) + (2*60*60)),
+        type = 'date',
+        tickformat = "%H:%M",
+        margin = list(pad = 5)
+        )
+    )
   })
   
   # Show the reactable table view of trips for selected route

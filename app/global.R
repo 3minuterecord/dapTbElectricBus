@@ -101,3 +101,34 @@ toSeconds <- function(x){
     )  
   )  
 } 
+
+# Add 24hrs to all transitions so that we can cehck for the scenario where a consecutive 
+# stops on a trip straddle midnight
+#stops$mod_time <- toSeconds(stops$departure_time) + (stops$quasi_block * 24 * 60 * 60)
+#stops$diff_mod <- c(0, diff(stops$mod_time))
+
+# # How many of these cases are less than a reasonable gap
+# # i.e., if there is greater than a couple of hrs there it is not practical to assume 
+# # it is part of the same block
+# checks <- sum(stops$diff_mod < REASONABLE_GAP & stops$quasi_block == 1)
+# if (checks >= 1){
+#   # Get the index of cases where there is a short gap
+#   index <- which(stops$diff_mod < REASONABLE_GAP & stops$quasi_block == 1)
+#   # Reset the block markers to zero
+#   stops$quasi_block[index] <- 0
+#   # For each index, check the next time to see if it is reasonable to 
+#   # say it is connected to the block or part of a new block
+#   for (i in 1:checks){
+#     j = 1
+#     repeat{
+#       chk_i <- stops$diff_time[index[i] + j]
+#       if (chk_i < REASONABLE_GAP){
+#         j = j + 1 # It is assumed to be part of the block, check the next...
+#       } else {
+#         # When there is an unreasonable gap, mark the block transition & break...
+#         stops$quasi_block[index[i] + j] <- 1
+#         break
+#       } 
+#     }  
+#   }
+# }

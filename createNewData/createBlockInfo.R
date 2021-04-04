@@ -134,21 +134,88 @@ for (route in routesVector){
       ungroup()
     
     blocks <- rbind(blocks, stops)
-    if (which(routesVector %in% route) == 1 & which(serviceVector %in% service) == 1){
-      print('Creating & writing to database table...')
-      DBI::dbWriteTable(con, name = 'blocks', value = stops, overwrite = TRUE)  
-    } else {
-      print('Appending data to database table...')
-      DBI::dbWriteTable(con, name = 'blocks', value = stops, append = TRUE)  
-    }
     rm(stops)
   }
 }
 
-# Test times for block transitions
-#stops <- data.frame(
-#  departure_time = c('09:01:55', '19:01:55', '23:59:55', '00:05:55', '00:08:55', '09:01:55', '09:30:55', '23:59:55', '00:10:55', '09:00:55', '09:30:55')
-#)
+routeVector <- unique(blocks$route_id)
+stop_analysis_out <- data.frame()
+dead_legs_out <- data.frame()
+d = 1
+l = 1
+DEFAULT_DEPOT <- depots$name[3]# Simmonscourt
+for (route in routesVector){
+  print(paste0('Route ', which(routesVector %in% route), ' of ', length(routesVector)))
+  # Trips 
+  tripsData <- blocks %>% filter(route_id == route)
+  # Loop through for each service id
+  serviceVector <- unique(tripsData$service_id)
+  for (service in serviceVector){
+    print(paste0('Service ', which(serviceVector %in% service), ' of ', length(serviceVector)))
+    serviceData <- tripsData %>% filter(service_id == service)
+    block_count <- max(serviceData$quasi_block)
+    for (b in sequence(block_count)){
+      stop_analysis_df <- serviceData %>% filter(quasi_block == b)
+      # Inter-trip dead trips 
+      for (row in sequence(nrow(stop_analysis_df) - 1)){
+        stop_1 <- stop_analysis_df$trip_last_stop_id[row]
+        stop_2 <- stop_analysis_df$trip_first_stop_id[row + 1]  
+        if (stop_1 != stop_2){
+          stop_analysis_out_add <- data.frame(
+            dead_trip_id = d,
+            route_id = stop_analysis_df$route_id[row],
+            quasi_block = b, #stop_analysis_df$quasi_block[row],
+            trip_id_order_1 = stop_analysis_df$trip_id_order[row],
+            trip_id_order_1 = stop_analysis_df$trip_id_order[row + 1],
+            trip_first_stop_id = stop_1,
+            trip_last_stop_id = stop_2,
+            dead_start = stop_analysis_df$trip_end[row],
+            dead_end = stop_analysis_df$trip_start[row + 1],
+            dead_time_hrs = round((toSeconds(stop_analysis_df$trip_start[row + 1]) -  toSeconds(stop_analysis_df$trip_end[row])) / (60*60), 2)
+          )
+          d = d + 1
+          stop_analysis_out <- rbind(stop_analysis_out, stop_analysis_out_add)
+          rm(stop_analysis_out_add)
+        }
+      }
+      # Block to depot dead legs
+      dead_legs_out_add <- data.frame(
+        dead_leg_id = l,
+        route_id = route,
+        quasi_block = b,
+        start_depot = DEFAULT_DEPOT,
+        block_first_stop_id =  stop_analysis_df$block_first_stop_id,
+        block_last_stop_id = stop_analysis_df$block_last_stop_id,
+        end_depot = DEFAULT_DEPOT  
+      ) %>% unique()
+      dead_legs_out <- rbind(dead_legs_out, dead_legs_out_add)
+      rm(stop_analysis_df)
+      l = l + 1
+    }
+  }
+}
+
+check_count_dead_trips <- stop_analysis_out %>%
+  select(trip_first_stop, trip_last_stop) %>%
+  unique()
+nrow(check_count)
+
+# Save data in chunks so that progress can be tracked
+chunkSize <- 500 # number of rows to save in each batch
+# Split the data frame into chunks of chunk size or less
+chunkList <- split(blocks, (seq(nrow(blocks))-1) %/% chunkSize)
+
+# Now write each data chunk to the database 
+for (i in 1:length(chunkList)){
+  print(paste0("Processing Batch ", i, " of ", length(chunkList)))
+  if (i == 1){
+    print('Creating & writing to database table...')
+    DBI::dbWriteTable(con, name = 'blocks', value = chunkList[[i]], overwrite = TRUE, row.names = FALSE)  
+  } else {
+    print('Appending data to database table...')
+    DBI::dbWriteTable(con, name = 'blocks', value = chunkList[[i]], append = TRUE, row.names = FALSE)  
+  }
+}  
 
 
 

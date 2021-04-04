@@ -223,6 +223,26 @@ if (sum(test != check_count_dead_trips) == 0){
 }
 
 
+# Save the stop out data frame to the data base 
+# =============================================
+
+# Save data in chunks so that progress can be tracked
+chunkSize <- 500 # number of rows to save in each batch
+# Split the data frame into chunks of chunk size or less
+chunkList <- split(stop_analysis_out, (seq(nrow(blocks))-1) %/% chunkSize)
+
+# Now write each data chunk to the database 
+for (i in 1:length(chunkList)){
+  print(paste0("Processing Batch ", i, " of ", length(chunkList)))
+  if (i == 1){
+    print('Creating & writing to database table...')
+    DBI::dbWriteTable(con, name = 'stop_analysis', value = chunkList[[i]], overwrite = TRUE, row.names = FALSE)  
+  } else {
+    print('Appending data to database table...')
+    DBI::dbWriteTable(con, name = 'stop_analysis', value = chunkList[[i]], append = TRUE, row.names = FALSE)  
+  }
+} 
+
 # Save the aggregated blocks data frame to the data base 
 # ======================================================
 

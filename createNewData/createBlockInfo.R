@@ -195,10 +195,36 @@ for (route in routesVector){
   }
 }
 
+# get the number of unique dead trips and use this to create a unique dead trip
+# if for later referencing in Azure Maps data call
 check_count_dead_trips <- stop_analysis_out %>%
-  select(trip_first_stop, trip_last_stop) %>%
-  unique()
+  select(trip_first_stop_id, trip_last_stop_id) %>%
+  unique() %>%
+  mutate(dead_trip_unique_id = sequence(n()))
 nrow(check_count)
+
+# Add a field for this unique id t the stop out dataframe, initialize as NA
+stop_analysis_out$dead_trip_unique_id <- NA
+
+# No loop through and assign the unique ids to the stop analysis data frame
+for (row in sequence(nrow(check_count_dead_trips))){
+  stop_analysis_out$dead_trip_unique_id[stop_analysis_out$trip_first_stop_id == check_count_dead_trips$trip_first_stop_id[row] & 
+    stop_analysis_out$trip_last_stop_id == check_count_dead_trips$trip_last_stop_id[row]] <- check_count_dead_trips$dead_trip_unique_id[row]
+}
+
+# Check that this has been correctly applied
+test <- stop_analysis_out %>%
+  select(trip_first_stop_id, trip_last_stop_id, dead_trip_unique_id) %>%
+  unique()
+if (sum(test != check_count_dead_trips) == 0){
+  print('Check is good, exact match with source unique list')
+} else {
+  print('Check is bad, not an exact match with source unique list')
+}
+
+
+# Save the aggregated blocks data frame to the data base 
+# ======================================================
 
 # Save data in chunks so that progress can be tracked
 chunkSize <- 500 # number of rows to save in each batch

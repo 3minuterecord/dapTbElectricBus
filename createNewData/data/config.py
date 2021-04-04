@@ -22,6 +22,14 @@ connQuote = f'''DRIVER={SQLDriver};
 shapes = r"C:\Users\James\Documents\MSc in Data Analytics\Database and Ananytics\Research Project\dapTbElectricDublinBus\ingestRawData\raw\shapes.txt"
 shapesname = ["shapes"]
 
+shapes = r"C:\Users\James\Documents\MSc in Data Analytics\Database and Ananytics\Research Project\dapTbElectricDublinBus\ingestRawData\raw\shapes.txt"
+shapesname = ["shapes"]
+
+longLatCol = ['shape_id','shape_pt_lat','shape_pt_lon']
+
 
 SQLDistinct = "SELECT DISTINCT {0} FROM {1}"
 
+SQLStr = """SELECT {0} 
+             FROM {1}
+             WHERE {2} = '{3}'"""

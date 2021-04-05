@@ -35,7 +35,6 @@ class UrlHandler():
         body = str.encode(json.dumps(data))
         response = self.callURL(in_config.url,body)
         jsonReadyData = response.read().decode('utf8').replace("'", '"')
-        print(jsonReadyData)
         elevationData = json.loads(jsonReadyData)
         s = json.dumps(elevationData, indent=4, sort_keys=True)
         return s

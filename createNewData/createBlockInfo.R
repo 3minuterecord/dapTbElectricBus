@@ -57,7 +57,11 @@ options(digits = 7)
 # Create empty data frame for aggregated block data
 # Each chunk of aggregated data will be row-binded to this data frame 
 blocks <- data.frame()
-# Loop through for each route id
+
+# Loop through for each route id & create quasi-block ids
+# & gather aggregated block info for use in later analysis
+# ========================================================
+
 for (route in routesVector){
   print(paste0('Route ', which(routesVector %in% route), ' of ', length(routesVector)))
   # Trips 
@@ -138,12 +142,21 @@ for (route in routesVector){
   }
 }
 
+# Trip End-Start Stop Analysis
+# ============================
+# Now create a data frame of rows identifying where consecutive stops in a block
+# are not the same stop, i.e. where there is a dead trip.  Dead trips are where 
+# the bus must drive from a stop at the end of a trip to the stop for the start 
+# of the next trip in the block
+
 routeVector <- unique(blocks$route_id)
 stop_analysis_out <- data.frame()
 dead_legs_out <- data.frame()
-d = 1
-l = 1
-DEFAULT_DEPOT <- depots$name[3]# Simmonscourt
+d = 1 # Counter 1
+l = 1 # Counter 2
+DEFAULT_DEPOT <- depots$name[3] # Simmonscourt - Assume all buses start from & return to this depot
+# The depot location will be used for later fetching of dead leg route info from Azure Maps (separate Python script)
+
 for (route in routesVector){
   print(paste0('Route ', which(routesVector %in% route), ' of ', length(routesVector)))
   # Trips 
@@ -164,6 +177,7 @@ for (route in routesVector){
           stop_analysis_out_add <- data.frame(
             dead_trip_id = d,
             route_id = stop_analysis_df$route_id[row],
+            service_id = service,
             quasi_block = b, #stop_analysis_df$quasi_block[row],
             trip_id_order_1 = stop_analysis_df$trip_id_order[row],
             trip_id_order_1 = stop_analysis_df$trip_id_order[row + 1],
@@ -195,6 +209,8 @@ for (route in routesVector){
   }
 }
 
+# Unique Dead Trips
+# =================
 # get the number of unique dead trips and use this to create a unique dead trip
 # if for later referencing in Azure Maps data call
 check_count_dead_trips <- stop_analysis_out %>%
@@ -203,7 +219,7 @@ check_count_dead_trips <- stop_analysis_out %>%
   mutate(dead_trip_unique_id = sequence(n()))
 nrow(check_count)
 
-# Add a field for this unique id t the stop out dataframe, initialize as NA
+# Add a field for this unique id to the stop out dataframe, initialize as NA
 stop_analysis_out$dead_trip_unique_id <- NA
 
 # No loop through and assign the unique ids to the stop analysis data frame
@@ -223,7 +239,7 @@ if (sum(test != check_count_dead_trips) == 0){
 }
 
 
-# Save the stop out data frame to the data base 
+# Save the stop_analysis_out data frame to the data base 
 # =============================================
 
 # Save data in chunks so that progress can be tracked

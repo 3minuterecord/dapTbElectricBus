@@ -68,6 +68,17 @@ shinyServer(function(input, output, session) {
     return(data)
   })
   
+  stop_analysis <- reactive({
+    req(input$selected_route)
+    con <- poolCheckout(conPool)
+    #selected_service <- 'y1002#1'
+    selected_service <- unique(tripsData()$service_id[1])
+    query <- paste0("SELECT * FROM stop_analysis WHERE route_id = '", input$selected_route, "' AND service_id = '", selected_service, "'")
+    data <- DBI::dbGetQuery(con, query)
+    poolReturn(con)
+    return(data)
+  })
+  
   shapeIds <- reactive({
     req(input$selected_block)
     trips <- stops() %>%
@@ -322,29 +333,40 @@ shinyServer(function(input, output, session) {
             color = '#70A432',
             #color = ~pal(id),
             weight = 2,
-            opacity = 1
+            opacity = 0.8
           )
       }
     })
     
+    outputMap <- outputMap %>%
+      addPolylines(
+        data = dead_shapes_reactive$data,
+        lat = ~latitude,
+        lng = ~longitude,
+        label = 'dead',
+        color = '#D43E2A',
+        weight = 3,
+        opacity = 1
+      )
+    
     # Plot block start and end coordinates as pins
-    start_and_ends <- start_and_ends$data
-    print(start_and_ends)
-    if(!is.null(start_and_ends) && length(start_and_ends) > 0){
-      for(location in start_and_ends$shape_id){
-        df <- start_and_ends %>% filter(shape_id == location)
-        outputMap <- outputMap %>% 
-        addAwesomeMarkers(
-          data = df, lng = ~lon, lat = ~lat,
-          label = 'start/end',
-          icon = awesomeIcons(
-            text = 'R',
-            markerColor = 'green',
-            iconColor = 'white'
-            )
-          )
-      }
-    }
+    # start_and_ends <- start_and_ends$data
+    # print(start_and_ends)
+    # if(!is.null(start_and_ends) && length(start_and_ends) > 0){
+    #   for(location in start_and_ends$shape_id){
+    #     df <- start_and_ends %>% filter(shape_id == location)
+    #     outputMap <- outputMap %>% 
+    #     addAwesomeMarkers(
+    #       data = df, lng = ~lon, lat = ~lat,
+    #       label = 'start/end',
+    #       icon = awesomeIcons(
+    #         text = 'R',
+    #         markerColor = 'green',
+    #         iconColor = 'white'
+    #         )
+    #       )
+    #   }
+    # }
     
     # Bus depots
     outputMap <- outputMap %>% 
@@ -374,6 +396,12 @@ shinyServer(function(input, output, session) {
     div(plotlyOutput('distancePlot'), style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;')
   })
   
+  # Create a reactive to store dead trip shape data
+  # so that it can be added to the leaflet map
+  dead_shapes_reactive <- reactiveValues(data = NULL)
+  
+  # Create a line chart of cumulative distance for the route block
+  # Include dead trip & leg distances
   output$distancePlot <- renderPlotly({
     req(input$selected_block)
     data <- stops() %>% filter(quasi_block == input$selected_block)  
@@ -381,10 +409,46 @@ shinyServer(function(input, output, session) {
     # TODO -- handling for times greater than 24 hrs, e.g., 28:30:00
     data <- data %>%
       mutate(time_axis = as.POSIXct(paste0('2021-03-01', departure_time), format = "%Y-%M-%d %H:%M:%S")) %>%
-      mutate(distance = shape_dist_traveled)
+      mutate(distance = shape_dist_traveled) %>%
+      mutate(type = 'route')
     data$distance <- c(0, diff(data$distance))
     data$distance[data$distance < 0] <- 0
+    
+    # Get dead trip details for selected route, service & block
+    deads <- stop_analysis() %>% 
+      filter(quasi_block == input$selected_block) %>%
+      mutate(dead_trip_id = as.integer(dead_trip_id)) %>%
+      mutate(dead_trip_unique_id = as.integer(dead_trip_unique_id))
+    
+    # If dead trip data exists, get the associated shape data
+    if (nrow(deads) != 0){
+      con <- poolCheckout(conPool)
+      query <- paste0("SELECT * FROM dead_leg_shapes WHERE dead_id IN (", paste0(sprintf("'%s'", unique(deads$dead_trip_unique_id)), collapse = ', '), ")")
+      dead_routes <- DBI::dbGetQuery(con, query) %>% mutate(dead_id = as.integer(dead_id))
+      poolReturn(con)
+      
+      # Write the shape data for the dead routes to the reactive so that they 
+      # will appear on the route leaflet map
+      dead_shapes_reactive$data <- dead_routes 
+      
+      # Calculate the distance stats & join with stop analysis data for
+      # dead_start time so indices where dead route distyances can be derived 
+      dead_routes_stats <- dead_routes %>%
+        select(dead_id, distance_km, time_hrs) %>%
+        unique() %>%
+        left_join(deads, by = c('dead_id' = 'dead_trip_unique_id')) %>%
+        select(dead_id, trip_first_stop_id, trip_last_stop_id, dead_start, distance_km, time_hrs, dead_time_hrs)
+      
+      # Add 1 to indices as distance trravelled is at available at the end of the trip
+      inds <- which(data$arrival_time %in% dead_routes_stats$dead_start) + 1
+      data$distance[inds] <- (dead_routes_stats$distance_km * 1000) # Convert from km to m for consistency
+      data$type[inds] <- 'dead'
+    }
+      
+    # Get the cumulative sum of distance & convert back to km
     data$distance <- cumsum(data$distance) / 1000
+    
+    # Now create the plot using Plotly
     p <- plot_ly(
       data, 
       x = ~time_axis, 
@@ -398,16 +462,17 @@ shinyServer(function(input, output, session) {
       text = ~paste0(round(distance, 1), " km @ ", format(time_axis, '%H:%M'))
       )
     
-    p <- p %>% add_trace(
-      x = ~max(time_axis), 
-      y = ~max(distance), 
-      type = 'scatter',
-      mode = 'text', 
-      text = ~paste0("<b> ", round(max(distance), 1), 'km <b>'), 
+    # Add text for the total distance travelled
+    p <- p %>% add_text(
+      x = ~max(time_axis),
+      y = ~max(distance),
+      mode = 'lines + text',
+      text = ~paste0("<b> ", round(max(distance), 1), 'km <b>'),
       textposition = 'right',
       textfont = list(color = '#000000', size = 13)
     )
     
+    # Add some final layout mods
     p <- p %>% layout(
       title = "",
       yaxis = list(title = list(text = '<b>Distance (km)</b>',  standoff = 20L),

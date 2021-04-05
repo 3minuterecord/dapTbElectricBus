@@ -46,7 +46,7 @@ dead_trips_unique = dead_trips_unique.reset_index()
 #%%
 # Create a tuple of lists to hold log info as we later loop through each dead
 # trip and get its route info
-dead_id, dead_type, object_id, start_lat, start_lon, end_lat, end_lon = ([], [], [], [], [], [], [])
+dead_trip_unique_id, dead_type, object_id, start_lat, start_lon, end_lat, end_lon = ([], [], [], [], [], [], [])
 
 # Set variable values for Azure Maps post request
 api_version = '1.0'
@@ -123,7 +123,7 @@ for trip in dead_trips_unique['dead_trip_unique_id'] :
     route_id = routes.insert_one(route).inserted_id
     
     # Collect log data
-    dead_id.append(dead_trips_unique['dead_trip_unique_id'][trip - 1])
+    dead_trip_unique_id.append(dead_trips_unique['dead_trip_unique_id'][trip - 1])
     dead_type.append(dead_trip_type)
     object_id.append(route_id)
     start_lat.append(coords.start_stop_lat)
@@ -134,7 +134,7 @@ for trip in dead_trips_unique['dead_trip_unique_id'] :
 #%%
 # Create a data frame of log output
 dead_route_log_df = pd.DataFrame(object_id, columns = ['object_id'])
-dead_route_log_df['dead_id'] = dead_id
+dead_route_log_df['dead_trip_unique_id'] = dead_trip_unique_id
 dead_route_log_df['dead_type'] = dead_type
 dead_route_log_df['start_lat'] = start_lat
 dead_route_log_df['start_lon'] = start_lon

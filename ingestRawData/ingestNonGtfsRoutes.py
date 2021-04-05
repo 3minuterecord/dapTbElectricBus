@@ -16,6 +16,7 @@ import json
 import pyodbc
 from pymongo import MongoClient
 
+# Open secret key file stored local
 filepath = 'C:\MyApps\dapTbElectricDublinBus\keys.json'
 with open(filepath) as json_file:
     key_data = json.load(json_file)
@@ -28,39 +29,30 @@ server = 'tcp:electricbus.database.windows.net'
 database = 'electricbus-eastus-prod'
 username = 'teamadmin'
 password = sqldb_pwd
- 
 connection_string = 'DRIVER={ODBC Driver 13 for SQL Server};SERVER=' + server + \
     ';DATABASE=' + database+';UID=' + username + ';PWD=' + password
-    
+
+# Connect to the database    
 conn = pyodbc.connect(connection_string)
 
-# Test the connection
+# Get the stop analysis data from the database and drop duplicates so that 
+# We only have unique dead trips
 query = 'SELECT * FROM stop_analysis'   
 dead_trips = pd.read_sql_query(query, conn)
 dead_trips_unique = dead_trips[['dead_trip_unique_id', 'trip_first_stop_id', 'trip_last_stop_id']].drop_duplicates()
+# Reset the index after dropping rows
+dead_trips_unique = dead_trips_unique.reset_index()
 
 #%%
+# Create a tuple of lists to hold log info as we later loop through each dead
+# trip and get its route info
 dead_id, dead_type, object_id, start_lat, start_lon, end_lat, end_lon = ([], [], [], [], [], [], [])
 
+# Set variable values for Azure Maps post request
 api_version = '1.0'
 check_traffic = '0'
 
-#begin = {'stop_lat':53.116927776990494, 'stop_lon':-7.325474118853148}
-#end = {'stop_lat':53.03361922891958, 'stop_lon':-7.303225998037869} 
-
-#route_dead_ref = 1
-#route_dead_typ = 'trip' # or 'leg'
-
-class begin:
-  def __init__(self, stop_lat, stop_lon):
-    self.stop_lat = stop_lat
-    self.stop_lon = stop_lon
-
-class end:
-  def __init__(self, stop_lat, stop_lon):
-    self.stop_lat = stop_lat
-    self.stop_lon = stop_lon
-    
+# Create a class for trip stop info, i.e., start end end coordinates  
 class stop:
   def __init__(self, start_stop_lat, start_stop_lon, end_stop_lat, end_stop_lon):
     self.start_stop_lat = start_stop_lat
@@ -68,12 +60,7 @@ class stop:
     self.end_stop_lat = end_stop_lat
     self.end_stop_lon = end_stop_lon
 
-#begin = begin(stop_lat = '53.116927776990494, 53.216927776990494', stop_lon = '-7.325474118853148, -7.525474118853148')
-#end = end(stop_lat = '53.03361922891958, 53.4361922891958', stop_lon = '-7.303225998037869, -7.403225998037869') 
-
-#begin = begin(stop_lat = '53.116927776990494', stop_lon = '-7.325474118853148')
-#end = end(stop_lat = '53.03361922891958', stop_lon = '-7.303225998037869'
-
+# Create a function for creating stop objects from stop ids
 def getStopCoords(start_stop, end_stop, connection) :
     query = "SELECT stop_lat, stop_lon FROM stops WHERE stop_id = '{}'".format(start_stop)   
     start_stop_coords = pd.read_sql_query(query, connection) 
@@ -84,8 +71,8 @@ def getStopCoords(start_stop, end_stop, connection) :
     return(stop(start_stop_coords[0], start_stop_coords[1], end_stop_coords[0], end_stop_coords[1]))
     
  
-# Save Raw Data to Azure Cosmos DB for MongoDB API
-# ================================================
+# Get & save Raw Data to Azure Cosmos DB for MongoDB API
+# ======================================================
 # Azure Cosmos DB service implements wire protocols for common NoSQL APIs including Cassandra, MongoDB. 
 # This allows you to use your familiar NoSQL client drivers and tools to interact with your Cosmos database.
 uri = "mongodb://electric-bus-cosmos-east-us:" + cosmos_key + "@electric-bus-cosmos-east-us.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&replicaSet=globaldb&maxIdleTimeMS=120000&appName=@electric-bus-cosmos-east-us@"
@@ -94,31 +81,28 @@ client = MongoClient(uri)
 db = client['bus_routes_nosql']
 # Create collection for route data
 routes = db.routes
-
-dead_trip_type = 'trip' # or 'leg'
+# define the dead type, i.e., either 'trip' or 'leg'.legs will be for depot to 
+# and from first/last block stop
+dead_trip_type = 'trip'
 #%%
-
+# Now loop through each unique dead trip & get route info from Azure Maps
+# Save each route as a document to Cosmos DB
 for trip in dead_trips_unique['dead_trip_unique_id'] :
-
+    print('Executing trip {} of {}'.format(trip, len(dead_trips_unique['dead_trip_unique_id'])))
     start_stop_id = dead_trips_unique['trip_first_stop_id'][trip - 1]
     end_stop_id = dead_trips_unique['trip_last_stop_id'][trip - 1]
 
     coords = getStopCoords(start_stop_id, end_stop_id, conn)
     
-    begin = begin(stop_lat = coords.start_stop_lon, stop_lon = coords.start_stop_lon)
-    end = end(stop_lat = coords.end_stop_lat, stop_lon = coords.end_stop_lon)
-
     # Azure Maps route URL (don't check traffic for this simple use-case)
     # Use batch mode so that the same query can be used for multiple route requests
     route_api_url = 'https://atlas.microsoft.com/route/directions/batch/sync/json?api-version=' + api_version \
                     + '&subscription-key=' + subscription_key + '&traffic=' + check_traffic
 
     # Create query string for start and end coordinates   
-    query_item = '?query={0},{1}:{2},{3}'.format(begin.stop_lat, begin.stop_lon, end.stop_lat, end.stop_lon)                 
-    #query_item = '?query={0},{1}:{2},{3}'.format(begin['stop_lat'], begin['stop_lon'], end['stop_lat'], end['stop_lon'])
-    print(query_item)
+    query_item = '?query={0},{1}:{2},{3}'.format(coords.start_stop_lat, coords.start_stop_lon, 
+                                                 coords.end_stop_lat, coords.end_stop_lon)
     payload = {'batchItems': [{'query': query_item}]}
-    print(payload)
     headers = {'Content-Type': 'application/json'}
 
     # Request the response from Azure maps
@@ -128,26 +112,26 @@ for trip in dead_trips_unique['dead_trip_unique_id'] :
     if response.status_code == 200:
        # Convert json to python dictionary
        response_data = json.loads(response.text)
-       print("Successful HTTP request\n")
-       print(response_data)
+       print("Successful HTTP request")
     else:   
        print("Error in the HTTP request")
 
     # Grab the route data recieved frm Azure Maps 
     route = response_data
     # Write Azure maps data to MongoDB & return the ID
+    print('Writing data to Cosmos DB...\n')
     route_id = routes.insert_one(route).inserted_id
-        
+    
+    # Collect log data
     dead_id.append(dead_trips_unique['dead_trip_unique_id'][trip - 1])
     dead_type.append(dead_trip_type)
     object_id.append(route_id)
-    start_lat.append(begin.stop_lat)
-    start_lon.append(begin.stop_lon)
-    end_lat.append(end.stop_lat)
-    end_lon.append(end.stop_lat)
+    start_lat.append(coords.start_stop_lat)
+    start_lon.append(coords.start_stop_lon)
+    end_lat.append(coords.end_stop_lat)
+    end_lon.append(coords.end_stop_lon)
 
 #%%
-
 # Create a data frame of log output
 dead_route_log_df = pd.DataFrame(object_id, columns = ['object_id'])
 dead_route_log_df['dead_id'] = dead_id
@@ -155,9 +139,30 @@ dead_route_log_df['dead_type'] = dead_type
 dead_route_log_df['start_lat'] = start_lat
 dead_route_log_df['start_lon'] = start_lon
 dead_route_log_df['end_lat'] = end_lat
-dead_route_log_df['end_lon'] = end_lat
+dead_route_log_df['end_lon'] = end_lon
 
 #%%
+# Review the log data that has been converted to data frame
 pd.set_option('display.max_columns', 500)
 pd.set_option('expand_frame_repr', False)
 print(dead_route_log_df)
+
+dead_route_log_df['object_id'] = dead_route_log_df['object_id'].astype(str)
+
+#%%
+# Create code to write a pandas dataframe to SQL table
+# Using a similar method to dbWriteTable in R
+from sqlalchemy import create_engine
+from urllib.parse import quote_plus
+import time
+
+quoted = quote_plus(connection_string)
+new_con = 'mssql+pyodbc:///?odbc_connect={}'.format(quoted)
+engine = create_engine(new_con,  fast_executemany = True)
+
+table_name = 'dead_trip_log'
+df = dead_route_log_df
+
+s = time.time()
+df.to_sql(table_name, engine, if_exists = 'replace', chunksize = None, index = False)
+print('Time taken: ' + str(round(time.time() - s, 1)) + 's')

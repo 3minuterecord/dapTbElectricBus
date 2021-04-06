@@ -1,6 +1,7 @@
 import pyodbc
 import pandas as pd
 import urllib
+import pymongo
 
 
 class Azure():
@@ -14,6 +15,8 @@ class Azure():
             return self.SelectDistinct(args[1], args[2])
         if args[0] == "SelectLongLat":
             return self.SelectLongLat(args[1],args[2],args[3],args[4])
+        if args[0] == "UploadToMongo":
+            return self.UploadToMongo(args[1],args[2])
 
     def AzureDBConn(self):
         conn = pyodbc.connect(self.in_config.connQuote)
@@ -23,12 +26,26 @@ class Azure():
         connStr = 'mssql+pyodbc:///?odbc_connect={}'
         Eng = connStr.format(urllib.parse.quote_plus(self.in_config.connQuote))
         return Eng 
+    
+    def AzureMongoConn(self):
+        uri = self.in_config("MongoQuote")
+        print(uri)
+        client = pymongo.MongoClient(uri)
+        return client
 
     def UploadToSQL(self, tablepath, tablename):
         conn = self.AzureDBEng()
         df = pd.read_csv(tablepath)
         df.to_sql(tablename, conn, if_exists='replace')
         conn.close()
+
+    def UploadToMongo(self, collection, MongoData):
+        client = self.AzureMongoConn()
+        mydb = client[collection]
+        mycol = mydb[collection]
+        mydict = MongoData
+        mycol.insert_one(mydict)
+        client.close()
     
     def SelectDistinct(self, column, tablename):
         """ Collect all the distinct shape ID's and loop through each

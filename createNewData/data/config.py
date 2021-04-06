@@ -8,6 +8,9 @@ SQLUser = os.environ.get("SQLUser")
 SQLDatabase = os.environ.get("SQLDatabase")
 SQLServer = os.environ.get("SQLServer")
 SQLDriver = os.environ.get("SQLDriver")
+MongoPass = os.environ.get("MongoPass")
+MongoUser = os.environ.get("MongoPass")
+MongoLocation = os.environ.get("MongoLocation")
 
 connQuote = f'''DRIVER={SQLDriver};
                 SERVER={SQLServer};
@@ -16,14 +19,14 @@ connQuote = f'''DRIVER={SQLDriver};
                 UID={SQLUser};
                 PWD={SQLPass}'''
 
+MongoQuote = f'''mongodb://{MongoUser}:{MongoPass}==@{MongoLocation}/?ssl=true&retrywrites=false&replicaSet=globaldb&maxIdleTimeMS=120000&appName=@{MongoUser}@'''
+
 
 
 
 shapes = r"C:\Users\James\Documents\MSc in Data Analytics\Database and Ananytics\Research Project\dapTbElectricDublinBus\ingestRawData\raw\shapes.txt"
 shapesname = ["shapes"]
 
-shapes = r"C:\Users\James\Documents\MSc in Data Analytics\Database and Ananytics\Research Project\dapTbElectricDublinBus\ingestRawData\raw\shapes.txt"
-shapesname = ["shapes"]
 
 longLatCol = ['shape_id','shape_pt_lat','shape_pt_lon']
 

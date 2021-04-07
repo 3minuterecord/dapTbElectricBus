@@ -50,3 +50,6 @@ README.html
 # Local passwords & keys
 password.json
 keys.json
+
+# Py chace
+common/__pycache__

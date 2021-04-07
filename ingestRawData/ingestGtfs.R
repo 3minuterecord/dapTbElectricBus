@@ -88,19 +88,16 @@ for (file in 1:length(files)){
   rm(data_add, table_name, file)
 }
 
-trip_selected <- data$trips %>%
-  filter(route_id == '60-116-d12-1')
-
 library(pool)
 library(DBI)
 library(rjson)
 
 # The app's database (SQL azure)
-DATABASE <- "electricbus-eastus-prod"
+DATABASE <- "electricbus-eastus-prod-temp"
 
 "%+%" <- function(...) paste0(...)
 
-DEFAULT_SERVER <- "electricbus.database.windows.net"
+DEFAULT_SERVER <- "electricbus-temp.database.windows.net"
 PORT <- 1433
 USERNAME <- "teamadmin"
 

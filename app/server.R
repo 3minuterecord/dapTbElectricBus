@@ -38,7 +38,9 @@ shinyServer(function(input, output, session) {
   # Get trip details for the selected route
   tripsData <- reactive({
     con <- poolCheckout(conPool)
-    query <- paste0("SELECT trip_id, service_id FROM trips WHERE route_id = '", input$selected_route, "'")
+    selected_route <- input$selected_route
+    #selected_route <- '60-1-b12-1'
+    query <- paste0("SELECT trip_id, service_id FROM trips WHERE route_id = '", selected_route, "'")
     data <- DBI::dbGetQuery(con, query)
     poolReturn(con)
     return(data)
@@ -53,12 +55,20 @@ shinyServer(function(input, output, session) {
     s.stop_id, s.stop_headsign, s.shape_dist_traveled, t.direction_id  
     FROM trips t LEFT JOIN stop_times s ON t.trip_id = s.trip_id WHERE t.trip_id IN (",
     paste0(sprintf("'%s'", unique(tripsData()$trip_id)), collapse = ', '), ") AND t.service_id = '", selected_service, "'")
-    data <- DBI::dbGetQuery(con, query)
+    
+    # Important
+    # =========
+    # Arrange by trip_id is important so that quasi-blocking of routes is effective
+    # trips need to be arranged sequentially to enable a reasonable estimate of what trips
+    # are feasible (ignoring power/fuel considerations) based on timings
+    # trips on the same route are feasible by the same bus if times do not overlap
+    data <- DBI::dbGetQuery(con, query) %>% arrange(trip_id)  
     poolReturn(con)
+    #write.csv(data %>% arrange(trip_id), 'test.csv')
     if(nrow(data) != 0){
       # Create quasi block number data based on departure time diffs
       data$quasi_block <- c(0, diff(toSeconds(data$departure_time)))
-      data$quasi_block <- ifelse(data$quasi_block < 0, 1, 0) 
+      data$quasi_block <- ifelse(data$quasi_block < 0, 1, 0)
       bounds <- length(data$quasi_block[data$quasi_block == 1])
       data$quasi_block[data$quasi_block == 1] <- (2:(bounds + 1))
       data$quasi_block[1] <- 1
@@ -71,9 +81,11 @@ shinyServer(function(input, output, session) {
   stop_analysis <- reactive({
     req(input$selected_route)
     con <- poolCheckout(conPool)
+    selected_route <- input$selected_route
+    #selected_route <- '60-1-b12-1'
     #selected_service <- 'y1002#1'
     selected_service <- unique(tripsData()$service_id[1])
-    query <- paste0("SELECT * FROM stop_analysis WHERE route_id = '", input$selected_route, "' AND service_id = '", selected_service, "'")
+    query <- paste0("SELECT * FROM stop_analysis WHERE route_id = '", selected_route, "' AND service_id = '", selected_service, "'")
     data <- DBI::dbGetQuery(con, query)
     poolReturn(con)
     return(data)
@@ -308,7 +320,7 @@ shinyServer(function(input, output, session) {
     # Add trip shape
     tripShapesData <- shapeData()
     tripIds  <- unique(tripShapesData$shape_id)
-    print(length(tripIds))
+    
     # Create color palette for list of trips.
     pal <- colorFactor(viridis(length(tripIds)), unlist(tripIds))
     
@@ -319,16 +331,13 @@ shinyServer(function(input, output, session) {
         j = j + 1
         coords <- tripShapesData %>% 
           filter(shape_id == id)
-          
-        latitudes <- coords$shape_pt_lat
-        longitudes <- coords$shape_pt_lon
-        tripPlotData <- data.frame(lats = c(unlist(latitudes)), lons = c(unlist(longitudes)))
+        
         # trip shape plot.
         outputMap <- outputMap %>%
           addPolylines(
-            data = tripPlotData,
-            lat = ~lats,
-            lng = ~lons,
+            data = coords,
+            lat = ~shape_pt_lat,
+            lng = ~shape_pt_lon,
             label = 'Trip-'%+% id,
             color = '#70A432',
             #color = ~pal(id),
@@ -338,16 +347,25 @@ shinyServer(function(input, output, session) {
       }
     })
     
-    outputMap <- outputMap %>%
-      addPolylines(
-        data = dead_shapes_reactive$data,
-        lat = ~latitude,
-        lng = ~longitude,
-        label = 'dead',
-        color = '#D43E2A',
-        weight = 3,
-        opacity = 1
-      )
+    if (!is.null(dead_shapes_reactive$data)){
+      dead_ids <- unique(dead_shapes_reactive$data$dead_trip_unique_id)
+      
+      for (id_dead in dead_ids){
+        dead_df <- dead_shapes_reactive$data %>%
+          filter(dead_trip_unique_id == id_dead)
+        
+        outputMap <- outputMap %>%
+          addPolylines(
+            data = dead_df,
+            lat = ~latitude,
+            lng = ~longitude,
+            label = 'dead',
+            color = '#D43E2A',
+            weight = 3,
+            opacity = 1
+          )  
+      }
+    }
     
     # Plot block start and end coordinates as pins
     # start_and_ends <- start_and_ends$data
@@ -369,9 +387,14 @@ shinyServer(function(input, output, session) {
     # }
     
     # Bus depots
+    depots_df <- depots() %>%
+      # Assume the same depot applies to all routes
+      # TODO -- Implement 'best location' depot for each route 
+      filter(name == 'Simmonscourt')
+    
     outputMap <- outputMap %>% 
       addAwesomeMarkers(
-        data = depots(), lng = ~lon, lat = ~lat,
+        data = depots_df, lng = ~lon, lat = ~lat,
         label = ~name,
         icon = awesomeIcons(
           text = '',
@@ -398,7 +421,19 @@ shinyServer(function(input, output, session) {
   
   # Create a reactive to store dead trip shape data
   # so that it can be added to the leaflet map
-  dead_shapes_reactive <- reactiveValues(data = NULL)
+  dead_shapes_reactive <- reactiveValues(data = NULL, stats = NULL)
+  
+  output$showDeadTripInfo <- renderUI({
+    div(verbatimTextOutput('deadTripTable'), style = 'margin: 20px; margin-right: 40px;')
+  })
+  
+  output$deadTripTable <- renderPrint({
+    if (is.null(dead_shapes_reactive$stats)){
+      'No dead trip data...'
+    } else {
+      dead_shapes_reactive$stats  
+    }
+  })
   
   # Create a line chart of cumulative distance for the route block
   # Include dead trip & leg distances
@@ -423,28 +458,47 @@ shinyServer(function(input, output, session) {
     # If dead trip data exists, get the associated shape data
     if (nrow(deads) != 0){
       con <- poolCheckout(conPool)
-      query <- paste0("SELECT * FROM dead_leg_shapes WHERE dead_id IN (", paste0(sprintf("'%s'", unique(deads$dead_trip_unique_id)), collapse = ', '), ")")
-      dead_routes <- DBI::dbGetQuery(con, query) %>% mutate(dead_id = as.integer(dead_id))
+      #query <- paste0("SELECT * FROM dead_leg_shapes WHERE dead_trip_unique_id = '113'")
+      query <- paste0("SELECT * FROM dead_leg_shapes WHERE dead_trip_unique_id IN (", paste0(sprintf("'%s'", unique(deads$dead_trip_unique_id)), collapse = ', '), ")")
+      dead_routes <- DBI::dbGetQuery(con, query) %>% 
+        mutate(dead_trip_unique_id = as.integer(dead_trip_unique_id)) %>%
+        arrange(point_order)
       poolReturn(con)
       
       # Write the shape data for the dead routes to the reactive so that they 
       # will appear on the route leaflet map
-      dead_shapes_reactive$data <- dead_routes 
+      dead_shapes_reactive$data <- dead_routes
       
       # Calculate the distance stats & join with stop analysis data for
       # dead_start time so indices where dead route distyances can be derived 
       dead_routes_stats <- dead_routes %>%
-        select(dead_id, distance_km, time_hrs) %>%
+        select(dead_trip_unique_id, distance_km, time_hrs) %>%
         unique() %>%
-        left_join(deads, by = c('dead_id' = 'dead_trip_unique_id')) %>%
-        select(dead_id, trip_first_stop_id, trip_last_stop_id, dead_start, distance_km, time_hrs, dead_time_hrs)
+        left_join(deads, by = 'dead_trip_unique_id') %>%
+        select(dead_trip_unique_id, trip_first_stop_id, trip_last_stop_id, dead_start, distance_km, time_hrs, dead_time_hrs) %>%
+        # Ensure time order is correct for later insertion by index
+        mutate(dead_start_secs = toSeconds(dead_start)) %>%
+        arrange(dead_start_secs) %>%
+        select(-dead_start_secs)
+        
+      print(dead_routes_stats)
+      dead_shapes_reactive$stats <- dead_routes_stats %>% 
+        rename(id = dead_trip_unique_id) %>%
+        rename(from_stop = trip_first_stop_id) %>%
+        rename(to_stop = trip_last_stop_id) %>%
+        rename(start = dead_start) %>%
+        rename(scheduled_time = dead_time_hrs) %>%
+        mutate(time_hrs = round(time_hrs, 2)) 
       
-      # Add 1 to indices as distance trravelled is at available at the end of the trip
+      # Add 1 to indices as distance travelled is at available at the end of the trip
       inds <- which(data$arrival_time %in% dead_routes_stats$dead_start) + 1
       data$distance[inds] <- (dead_routes_stats$distance_km * 1000) # Convert from km to m for consistency
       data$type[inds] <- 'dead'
+    } else {
+      dead_shapes_reactive$data <- NULL
+      dead_shapes_reactive$stats <- NULL
     }
-      
+     
     # Get the cumulative sum of distance & convert back to km
     data$distance <- cumsum(data$distance) / 1000
     

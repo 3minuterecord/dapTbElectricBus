@@ -38,6 +38,7 @@ body <- dashboardBody(
                 div(uiOutput('showMainBusMap'))
               ),
               column(6, 
+                div(uiOutput('showDeadTripInfo')),     
                 div(uiOutput('showRoutePlots'))     
               )
             ),

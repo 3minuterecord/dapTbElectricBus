@@ -10,14 +10,14 @@ with open(filepath) as json_file:
     sqldb_pwd = key_data['sqldb_pwd'] 
 
 #%%
-# Extract Log of Dead Trips for Azure SQL DB
-# ==========================================
+# Extract Log of Dead TRIPS from Azure SQL DB
+# ===========================================
 
 # Create a connection to the Azure SQL database
 import pyodbc
  
-server = 'tcp:electricbus.database.windows.net'
-database = 'electricbus-eastus-prod'
+server = 'tcp:electricbus-temp.database.windows.net'
+database = 'electricbus-eastus-prod-temp'
 username = 'teamadmin'
 password = sqldb_pwd
  
@@ -29,17 +29,26 @@ conn = pyodbc.connect(connection_string)
 # Extract the dead_trip_log table created from R script analysis of GTFS
 query = 'SELECT * FROM dead_trip_log'   
 dead_trip_log = pd.read_sql_query(query, conn)
+del query
+
+#%%
+# Extract Log of Dead LEGS from Azure SQL DB
+# ==========================================
+
+# Extract the dead_leg_log table created from R script analysis of GTFS
+query = 'SELECT * FROM dead_leg_log'   
+dead_leg_log = pd.read_sql_query(query, conn)
 
 #%%    
-# Extract Data Raw Data from Azure Cosmos DB for MongoDB API
-# ==========================================================
+# Extract Raw Route Data from Azure Cosmos DB for MongoDB API
+# ===========================================================
 # Azure Cosmos DB service implements wire protocols for common NoSQL APIs 
 # including Cassandra, MongoDB. This allows you to use your familiar NoSQL 
 # client drivers and tools to interact with your Cosmos database.
 from pymongo import MongoClient
 from bson import ObjectId
-uri = "mongodb://electric-bus-cosmos-east-us:" + cosmos_key + \
-    "@electric-bus-cosmos-east-us.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&replicaSet=globaldb&maxIdleTimeMS=120000&appName=@electric-bus-cosmos-east-us@"
+uri = "mongodb://electricbus-wood:" + cosmos_key + "@electricbus-wood.mongo.cosmos.azure.com:10255/?ssl=true&replicaSet=globaldb&retrywrites=false&maxIdleTimeMS=120000&appName=@electricbus-wood@"
+#uri = "mongodb://electric-bus-cosmos-east-us:" + cosmos_key + "@electric-bus-cosmos-east-us.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&replicaSet=globaldb&maxIdleTimeMS=120000&appName=@electric-bus-cosmos-east-us@"
 client = MongoClient(uri)
 
 # Create database
@@ -53,7 +62,7 @@ routes = db.routes
 
 # Create a tuple of lists to hold parsed JSON data so that it can be 
 # easily passed into a dataframe for easy loading to RDMS table.
-dead_id, latitude, longitude, distance_km, time_hrs, mode = ([], [], [], [], [], []) 
+dead_trip_unique_id, latitude, longitude, point_order, distance_km, time_hrs, mode = ([], [], [], [], [], [], []) 
 
 for count, object_id in enumerate(dead_trip_log['object_id']):
     print('Processing dead trip {} of {}'.format(count + 1, len(dead_trip_log['object_id'])))
@@ -68,19 +77,23 @@ for count, object_id in enumerate(dead_trip_log['object_id']):
 
     # Now loop through and append data to the appropriate lists
     print('Parsing points...')
-    for point in route_points :
-        dead_id.append(dead_trip_log['dead_id'][count])
+    for point_count, point in enumerate(route_points) :
+        dead_trip_unique_id.append(dead_trip_log['dead_trip_unique_id'][count])
         latitude.append(point['latitude'])
         longitude.append(point['longitude'])
+        # Point order is important to ensure correct point
+        # order after loading data from SQL db
+        point_order.append(point_count + 1)
         distance_km.append(summary_info['lengthInMeters'] / 1000)
         time_hrs.append(round(summary_info['travelTimeInSeconds'] / (60*60), 6))
         mode.append(sections_info['travelMode'])
 
 #%%
 # Create a dataframe & populate with the list data    
-route_df = pd.DataFrame(dead_id, columns = ['dead_id'])
+route_df = pd.DataFrame(dead_trip_unique_id, columns = ['dead_trip_unique_id'])
 route_df['latitude'] = latitude
 route_df['longitude'] = longitude
+route_df['point_order'] = point_order
 route_df['distance_km'] = distance_km
 route_df['time_hrs'] = time_hrs
 
@@ -99,5 +112,5 @@ table_name = 'dead_leg_shapes'
 df = route_df
 
 s = time.time()
-df.to_sql(table_name, engine, if_exists = 'replace', chunksize = None, index = False)
+df.to_sql(table_name, engine, if_exists = 'replace', chunksize = 10000, index = False)
 print('Time taken: ' + str(round(time.time() - s, 1)) + 's')

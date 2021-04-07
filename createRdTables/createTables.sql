@@ -5,14 +5,6 @@ CREATE TABLE stops (
  stop_lon decimal(20,14),
 );
 
-CREATE TABLE stops (
-  shape_id,
-  shape_pt_lat,
-  shape_pt_lon,
-  shape_pt_sequence,
-  shape_dist_traveled
-);
-
 CREATE INDEX idx_trip_id
 ON trips (trip_id);
 
@@ -24,3 +16,15 @@ ON shapes (shape_id);
 
 CREATE INDEX idx_trip_id
 ON stop_times (trip_id);
+
+CREATE INDEX idx_route_id
+ON stop_analysis (route_id)
+
+CREATE INDEX idx_service_id
+ON stop_analysis (service_id)
+
+CREATE INDEX idx_dead_trip_unique_id
+ON dead_leg_shapes (dead_trip_unique_id);
+
+CREATE INDEX idx_stop_id_id
+ON stops (stop_id);

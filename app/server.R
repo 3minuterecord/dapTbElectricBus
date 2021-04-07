@@ -458,8 +458,7 @@ shinyServer(function(input, output, session) {
     # If dead trip data exists, get the associated shape data
     if (nrow(deads) != 0){
       con <- poolCheckout(conPool)
-      #query <- paste0("SELECT * FROM dead_leg_shapes WHERE dead_trip_unique_id = '113'")
-      query <- paste0("SELECT * FROM dead_leg_shapes WHERE dead_trip_unique_id IN (", paste0(sprintf("'%s'", unique(deads$dead_trip_unique_id)), collapse = ', '), ")")
+      query <- paste0("SELECT * FROM dead_trip_shapes WHERE dead_trip_unique_id IN (", paste0(sprintf("'%s'", unique(deads$dead_trip_unique_id)), collapse = ', '), ")")
       dead_routes <- DBI::dbGetQuery(con, query) %>% 
         mutate(dead_trip_unique_id = as.integer(dead_trip_unique_id)) %>%
         arrange(point_order)

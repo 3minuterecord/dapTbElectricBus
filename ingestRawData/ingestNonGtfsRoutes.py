@@ -86,13 +86,13 @@ def getLegCoords(start_stop, end_stop, connection) :
         check_depot_name = depots['name'] == start_stop
         if sum(check_depot_name) != 0 :
             start_stop_coords = []
-            start_stop_coords.append(depots['lat'][check_depot_name])
-            start_stop_coords.append(depots['lon'][check_depot_name])
+            start_stop_coords.append(depots['lat'][check_depot_name].values.tolist()[0])
+            start_stop_coords.append(depots['lon'][check_depot_name].values.tolist()[0])
         else :
             print("Depot name '{}' not found".format(start_stop))
             return(None)      
                    
-    if start_stop[0:3].isdigit() :
+    if end_stop[0:3].isdigit() :
         query = "SELECT stop_lat, stop_lon FROM stops WHERE stop_id = '{}'".format(end_stop)   
         end_stop_coords = pd.read_sql_query(query, connection)
         end_stop_coords = end_stop_coords.values.tolist()[0]
@@ -101,8 +101,8 @@ def getLegCoords(start_stop, end_stop, connection) :
         check_depot_name = depots['name'] == end_stop
         if sum(check_depot_name) != 0 :
             end_stop_coords = []
-            end_stop_coords.append(depots['lat'][check_depot_name])
-            end_stop_coords.append(depots['lon'][check_depot_name])
+            end_stop_coords.append(depots['lat'][check_depot_name].values.tolist()[0])
+            end_stop_coords.append(depots['lon'][check_depot_name].values.tolist()[0])
         else :
             print("Depot name '{}' not found".format(end_stop))
             return(None)       
@@ -121,70 +121,9 @@ client = MongoClient(uri)
 db = client['bus_routes_nosql']
 # Create collection for route data
 routes = db.routes
-# define the dead type, i.e., either 'trip' or 'leg'.legs will be for depot to 
-# and from first/last block stop
-dead_trip_type = 'trip'
-#%%
-# Now loop through each unique dead trip & get route info from Azure Maps
-# Save each route as a document to Cosmos DB
-for trip in dead_trips_unique['dead_trip_unique_id'] :
-    print('Executing trip {} of {}'.format(trip, len(dead_trips_unique['dead_trip_unique_id'])))
-    start_stop_id = dead_trips_unique['trip_first_stop_id'][trip - 1]
-    end_stop_id = dead_trips_unique['trip_last_stop_id'][trip - 1]
 
-    coords = getStopCoords(start_stop_id, end_stop_id, conn)
-    
-    # Azure Maps route URL (don't check traffic for this simple use-case)
-    # Use batch mode so that the same query can be used for multiple route requests
-    route_api_url = 'https://atlas.microsoft.com/route/directions/batch/sync/json?api-version=' + api_version \
-                    + '&subscription-key=' + subscription_key + '&traffic=' + check_traffic
-
-    # Create query string for start and end coordinates   
-    query_item = '?query={0},{1}:{2},{3}'.format(coords.start_stop_lat, coords.start_stop_lon, 
-                                                 coords.end_stop_lat, coords.end_stop_lon)
-    payload = {'batchItems': [{'query': query_item}]}
-    headers = {'Content-Type': 'application/json'}
-
-    # Request the response from Azure maps
-    response = requests.request("POST", route_api_url, headers=headers, data=json.dumps(payload))
-    
-    # checking the status code of the request
-    if response.status_code == 200:
-       # Convert json to python dictionary
-       response_data = json.loads(response.text)
-       print("Successful HTTP request")
-    else:   
-       print("Error in the HTTP request")
-
-    # Grab the route data recieved frm Azure Maps 
-    route = response_data
-    # Write Azure maps data to MongoDB & return the ID
-    print('Writing data to Cosmos DB...\n')
-    route_id = routes.insert_one(route).inserted_id
-    
-    # Collect log data
-    dead_trip_unique_id.append(dead_trips_unique['dead_trip_unique_id'][trip - 1])
-    dead_type.append(dead_trip_type)
-    object_id.append(route_id)
-    start_lat.append(coords.start_stop_lat)
-    start_lon.append(coords.start_stop_lon)
-    end_lat.append(coords.end_stop_lat)
-    end_lon.append(coords.end_stop_lon)
-
-    # Create a data frame of log output
-    dead_route_log_df = pd.DataFrame(object_id, columns = ['object_id'])
-    dead_route_log_df['dead_trip_unique_id'] = dead_trip_unique_id
-    dead_route_log_df['dead_type'] = dead_type
-    dead_route_log_df['start_lat'] = start_lat
-    dead_route_log_df['start_lon'] = start_lon
-    dead_route_log_df['end_lat'] = end_lat
-    dead_route_log_df['end_lon'] = end_lon
-    
-    # Convert object_id to string
-    dead_route_log_df['object_id'] = dead_route_log_df['object_id'].astype(str)
 
 #%%
-
 # Azure Maps route URL (don't check traffic for this simple use-case)
 # Use batch mode so that the same query can be used for multiple route requests
 route_api_url = 'https://atlas.microsoft.com/route/directions/batch/sync/json?api-version=' + api_version \
@@ -193,7 +132,11 @@ route_api_url = 'https://atlas.microsoft.com/route/directions/batch/sync/json?ap
 # Function for looping through each unique dead trip/leg & getting route info 
 # from Azure Maps. Save each route as a document to Cosmos DB & save a log to 
 # Azure SQL db.
+# Define the dead location (loc) type, i.e., either 'trip' or 'leg'. legs will  
+# be for depot to & from first/last block stop
 def getRouteInfo (trip_vec, start_vec, end_vec, api_url, dead_loc, collection, mode = 'stops'):
+    # Ceate tuple of lists for collection of log data  
+    dead_unique_id, dead_type, object_id, start_lat, start_lon, end_lat, end_lon = ([], [], [], [], [], [], [])
     for trip in trip_vec :
         print('Executing trip {} of {}'.format(trip, len(trip_vec)))
         start_stop = start_vec[trip - 1]
@@ -201,7 +144,11 @@ def getRouteInfo (trip_vec, start_vec, end_vec, api_url, dead_loc, collection, m
         
         # Getting coordinates, depends on the mode (stops or legs)
         if mode == 'stops' :
-            coords = getStopCoords(start_stop, end_stop, conn)
+            if not start_stop[0:3].isdigit() :
+                print("Stop id '{}' is not in the correct format - Check the mode!".format(start_stop))
+                return(None)
+            else :
+                coords = getStopCoords(start_stop, end_stop, conn)
         elif mode == 'legs' :
             coords = getLegCoords(start_stop, end_stop, conn)
         else :
@@ -230,10 +177,7 @@ def getRouteInfo (trip_vec, start_vec, end_vec, api_url, dead_loc, collection, m
         # Write Azure maps data to MongoDB & return the ID
         print('Writing data to Cosmos DB...\n')
         route_id = collection.insert_one(route).inserted_id
-        
-        # Ceate tuple of lists for collection of log data  
-        dead_unique_id, dead_type, object_id, start_lat, start_lon, end_lat, end_lon = ([], [], [], [], [], [], [])
-        
+                     
         # Collect log data
         dead_unique_id.append(trip_vec[trip - 1])
         dead_type.append(dead_loc)
@@ -242,23 +186,23 @@ def getRouteInfo (trip_vec, start_vec, end_vec, api_url, dead_loc, collection, m
         start_lon.append(coords.start_stop_lon)
         end_lat.append(coords.end_stop_lat)
         end_lon.append(coords.end_stop_lon)
-    
-        # Create a data frame of log output
-        dead_route_log_df = pd.DataFrame(object_id, columns = ['object_id'])
-        dead_route_log_df['dead_unique_id'] = dead_unique_id
-        dead_route_log_df['dead_type'] = dead_type
-        dead_route_log_df['start_lat'] = start_lat
-        dead_route_log_df['start_lon'] = start_lon
-        dead_route_log_df['end_lat'] = end_lat
-        dead_route_log_df['end_lon'] = end_lon
         
-        # Convert object_id to string
-        dead_route_log_df['object_id'] = dead_route_log_df['object_id'].astype(str)
+    # Create a data frame of log output
+    dead_route_log_df = pd.DataFrame(object_id, columns = ['object_id'])
+    dead_route_log_df['dead_unique_id'] = dead_unique_id
+    dead_route_log_df['dead_type'] = dead_type
+    dead_route_log_df['start_lat'] = start_lat
+    dead_route_log_df['start_lon'] = start_lon
+    dead_route_log_df['end_lat'] = end_lat
+    dead_route_log_df['end_lon'] = end_lon
+       
+    # Convert object_id to string
+    dead_route_log_df['object_id'] = dead_route_log_df['object_id'].astype(str)
         
     return(dead_route_log_df)
 
 #%%
-# Get Dead TRIP data & create table of log info
+# Get Dead TRIP route data & create table of log info
 dead_trip_log_df = getRouteInfo(
     trip_vec = dead_trips_unique['dead_trip_unique_id'], 
     start_vec = dead_trips_unique['trip_first_stop_id'], 
@@ -271,10 +215,34 @@ dead_trip_log_df = getRouteInfo(
 
 
 #%%
+# Now Focus on Dead Leg Route Data
+query = 'SELECT * FROM dead_leg_log'   
+dead_legs = pd.read_sql_query(query, conn)
+dead_legs_unique = dead_legs[['dead_leg_unique_id', 'start', 'end']].drop_duplicates()
+# Reset the index after dropping rows
+dead_legs_unique = dead_legs_unique.reset_index()
+del query
+
+
+#%%
+# Get Dead TRIP route data & create table of log info
+dead_leg_log_df = getRouteInfo(
+    trip_vec = dead_legs_unique['dead_leg_unique_id'], 
+    start_vec = dead_legs_unique['start'], 
+    end_vec = dead_legs_unique['end'], 
+    api_url = route_api_url, 
+    dead_loc = 'leg',
+    collection = routes,
+    mode = 'legs'
+    )
+
+
+#%%
 # Review the log data that has been converted to data frame
 pd.set_option('display.max_columns', 500)
 pd.set_option('expand_frame_repr', False)
-print(dead_route_log_df)
+print(dead_trip_log_df)
+print(dead_leg_log_df)
 
 
 #%%
@@ -289,37 +257,21 @@ new_con = 'mssql+pyodbc:///?odbc_connect={}'.format(quoted)
 engine = create_engine(new_con,  fast_executemany = True)
 
 table_name = 'dead_trip_log'
-df = dead_route_log_df
+df = dead_trip_log_df
 
 s = time.time()
 df.to_sql(table_name, engine, if_exists = 'replace', chunksize = None, index = False)
 print('Time taken: ' + str(round(time.time() - s, 1)) + 's')
 
-#%%
-# Now Focus on Dead Leg Route Data
-query = 'SELECT * FROM dead_leg_log'   
-dead_legs = pd.read_sql_query(query, conn)
+table_name = 'dead_leg_log'
+df = dead_leg_log_df
 
-# Create a tuple of lists to hold log info as we later loop through each dead
-# trip and get its route info
-dead_leg_unique_id, dead_type, object_id, start_lat, start_lon, end_lat, end_lon = ([], [], [], [], [], [], [])
+s = time.time()
+df.to_sql(table_name, engine, if_exists = 'replace', chunksize = None, index = False)
+print('Time taken: ' + str(round(time.time() - s, 1)) + 's')
 
-# define the dead type, i.e., either 'trip' or 'leg'.legs will be for depot to 
-# and from first/last block stop
-dead_trip_type = 'leg'
 
-#%%
-a = 4
-b = 7
-if a > b : 
-    print('hggh')
-else :
-    print('no') 
 
-if b == a :
-    print('bow owo')
-else :
-    print('yes')    
     
     
     

@@ -8,7 +8,6 @@ class Azure():
     def __init__(self,in_config):
         self.in_config = in_config
     def __call__(self, *args):
-
         if args[0] == "UploadToSQL":
             return self.UploadToSQL(args[1], args[2])
         if args[0] == "SelectDistinct":
@@ -28,7 +27,7 @@ class Azure():
         return Eng 
     
     def AzureMongoConn(self):
-        uri = self.in_config("MongoQuote")
+        uri = self.in_config.MongoQuote
         print(uri)
         client = pymongo.MongoClient(uri)
         return client

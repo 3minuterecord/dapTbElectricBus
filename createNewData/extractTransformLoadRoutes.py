@@ -60,57 +60,85 @@ db = client['bus_routes_nosql']
 # Collection for route data
 routes = db.routes
 
-# Create a tuple of lists to hold parsed JSON data so that it can be 
-# easily passed into a dataframe for easy loading to RDMS table.
-dead_trip_unique_id, latitude, longitude, point_order, distance_km, time_hrs, mode = ([], [], [], [], [], [], []) 
+def tabulateRouteInfo (object_vec, trip_vec, collection):
+    # Create a tuple of lists to hold parsed JSON data so that it can be 
+    # easily passed into a dataframe for easy loading to RDMS table.
+    dead_trip_unique_id, latitude, longitude, point_order, distance_km, time_hrs, mode = ([], [], [], [], [], [], []) 
+    for count, object_id in enumerate(object_vec):
+        print('Processing dead trip {} of {}'.format(count + 1, len(object_vec)))
+        post_id = ObjectId(object_id)        
+        route_data = collection.find_one({"_id": post_id})
+    
+        # Grab blocks of info from the route data
+        route_points = route_data['batchItems'][0]['response']['routes'][0]['legs'][0]['points']
+        summary_info = route_data['batchItems'][0]['response']['routes'][0]['summary']
+        sections_info = route_data['batchItems'][0]['response']['routes'][0]['sections'][0]
+    
+        # Now loop through and append data to the appropriate lists
+        print('Parsing points...')
+        for point_count, point in enumerate(route_points) :
+            dead_trip_unique_id.append(trip_vec[count])
+            latitude.append(point['latitude'])
+            longitude.append(point['longitude'])
+            # Point order is important to ensure correct point
+            # order after loading data from SQL db
+            point_order.append(point_count + 1)
+            distance_km.append(summary_info['lengthInMeters'] / 1000)
+            time_hrs.append(round(summary_info['travelTimeInSeconds'] / (60*60), 6))
+            mode.append(sections_info['travelMode'])
 
-for count, object_id in enumerate(dead_trip_log['object_id']):
-    print('Processing dead trip {} of {}'.format(count + 1, len(dead_trip_log['object_id'])))
-    post_id = ObjectId(object_id)
-    #pprint.pprint(routes.find_one({"_id": post_id}))
-    route_data = routes.find_one({"_id": post_id})
+    # Create a dataframe & populate with the list data    
+    route_df = pd.DataFrame(dead_trip_unique_id, columns = ['dead_trip_unique_id'])
+    route_df['latitude'] = latitude
+    route_df['longitude'] = longitude
+    route_df['point_order'] = point_order
+    route_df['distance_km'] = distance_km
+    route_df['time_hrs'] = time_hrs
+    
+    return(route_df)
 
-    # Grab blocks of info from the route data
-    route_points = route_data['batchItems'][0]['response']['routes'][0]['legs'][0]['points']
-    summary_info = route_data['batchItems'][0]['response']['routes'][0]['summary']
-    sections_info = route_data['batchItems'][0]['response']['routes'][0]['sections'][0]
-
-    # Now loop through and append data to the appropriate lists
-    print('Parsing points...')
-    for point_count, point in enumerate(route_points) :
-        dead_trip_unique_id.append(dead_trip_log['dead_trip_unique_id'][count])
-        latitude.append(point['latitude'])
-        longitude.append(point['longitude'])
-        # Point order is important to ensure correct point
-        # order after loading data from SQL db
-        point_order.append(point_count + 1)
-        distance_km.append(summary_info['lengthInMeters'] / 1000)
-        time_hrs.append(round(summary_info['travelTimeInSeconds'] / (60*60), 6))
-        mode.append(sections_info['travelMode'])
 
 #%%
-# Create a dataframe & populate with the list data    
-route_df = pd.DataFrame(dead_trip_unique_id, columns = ['dead_trip_unique_id'])
-route_df['latitude'] = latitude
-route_df['longitude'] = longitude
-route_df['point_order'] = point_order
-route_df['distance_km'] = distance_km
-route_df['time_hrs'] = time_hrs
+# Get Dead TRIP route data from Cosmos, tabulate it, and save to Azure SQL db
+dead_trip_shapes_df = tabulateRouteInfo(
+    object_vec = dead_trip_log['object_id'], 
+    trip_vec = dead_trip_log['dead_unique_id'],             
+    collection = routes    
+    )
+
+
+#%%
+# Get Dead LEG route data from Cosmos, tabulate it, and save to Azure SQL db
+dead_leg_shapes_df = tabulateRouteInfo(
+    object_vec = dead_leg_log['object_id'], 
+    trip_vec = dead_leg_log['dead_unique_id'],             
+    collection = routes    
+    )
+
 
 #%%
 # Create code to write a pandas dataframe to SQL table
 # Using a similar method to dbWriteTable in R
 from sqlalchemy import create_engine
 from urllib.parse import quote_plus
-import time
+
+import importlib.util
+spec = importlib.util.spec_from_file_location("functions", "C:/MyApps/dapTbElectricDublinBus/common/functions.py")
+functs = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(functs)
 
 quoted = quote_plus(connection_string)
 new_con = 'mssql+pyodbc:///?odbc_connect={}'.format(quoted)
 engine = create_engine(new_con,  fast_executemany = True)
 
-table_name = 'dead_leg_shapes'
-df = route_df
+functs.saveLogInfo(
+    table = 'dead_trip_shapes', 
+    df = dead_trip_shapes_df,
+    eng = engine
+    )
 
-s = time.time()
-df.to_sql(table_name, engine, if_exists = 'replace', chunksize = 10000, index = False)
-print('Time taken: ' + str(round(time.time() - s, 1)) + 's')
+functs.saveLogInfo(
+    table = 'dead_leg_shapes', 
+    df = dead_leg_shapes_df,
+    eng = engine
+    )

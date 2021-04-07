@@ -45,10 +45,6 @@ dead_trips_unique = dead_trips_unique.reset_index()
 del query
 
 #%%
-# Create a tuple of lists to hold log info as we later loop through each dead
-# trip and get its route info
-dead_trip_unique_id, dead_type, object_id, start_lat, start_lon, end_lat, end_lon = ([], [], [], [], [], [], [])
-
 # Set variable values for Azure Maps post request
 api_version = '1.0'
 check_traffic = '0'
@@ -250,29 +246,28 @@ print(dead_leg_log_df)
 # Using a similar method to dbWriteTable in R
 from sqlalchemy import create_engine
 from urllib.parse import quote_plus
-import time
+
+import importlib.util
+spec = importlib.util.spec_from_file_location("functions", "C:/MyApps/dapTbElectricDublinBus/common/functions.py")
+functs = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(functs)
 
 quoted = quote_plus(connection_string)
 new_con = 'mssql+pyodbc:///?odbc_connect={}'.format(quoted)
 engine = create_engine(new_con,  fast_executemany = True)
 
-table_name = 'dead_trip_log'
-df = dead_trip_log_df
+# Save Dead TRIP log to Azure SQL db
+functs.saveLogInfo(
+    table = 'dead_trip_log', 
+    df = dead_trip_log_df,
+    eng = engine
+    )
 
-s = time.time()
-df.to_sql(table_name, engine, if_exists = 'replace', chunksize = None, index = False)
-print('Time taken: ' + str(round(time.time() - s, 1)) + 's')
+# Save Dead TRIP log to Azure SQL db
+functs.saveLogInfo(
+    table = 'dead_leg_log', 
+    df = dead_leg_log_df,
+    eng = engine
+    )
 
-table_name = 'dead_leg_log'
-df = dead_leg_log_df
-
-s = time.time()
-df.to_sql(table_name, engine, if_exists = 'replace', chunksize = None, index = False)
-print('Time taken: ' + str(round(time.time() - s, 1)) + 's')
-
-
-
-    
-    
-    
-    
+        

@@ -321,6 +321,26 @@ shinyServer(function(input, output, session) {
     tripShapesData <- shapeData()
     tripIds  <- unique(tripShapesData$shape_id)
     
+    if (!is.null(dead_shapes_reactive$legs)){
+      dead_ids <- as.integer(unique(dead_shapes_reactive$legs$dead_trip_unique_id))
+      
+      for (id_dead in dead_ids){
+        dead_df <- dead_shapes_reactive$legs %>%
+          filter(dead_trip_unique_id == id_dead)
+        
+        outputMap <- outputMap %>%
+          addPolylines(
+            data = dead_df,
+            lat = ~latitude,
+            lng = ~longitude,
+            label = 'Dead Leg',
+            color = '#FFBA00',
+            weight = 3,
+            opacity = 1
+          )  
+      }
+    }
+    
     # Create color palette for list of trips.
     pal <- colorFactor(viridis(length(tripIds)), unlist(tripIds))
     
@@ -359,32 +379,13 @@ shinyServer(function(input, output, session) {
             data = dead_df,
             lat = ~latitude,
             lng = ~longitude,
-            label = 'dead',
+            label = 'Dead Trip',
             color = '#D43E2A',
             weight = 3,
             opacity = 1
           )  
       }
     }
-    
-    # Plot block start and end coordinates as pins
-    # start_and_ends <- start_and_ends$data
-    # print(start_and_ends)
-    # if(!is.null(start_and_ends) && length(start_and_ends) > 0){
-    #   for(location in start_and_ends$shape_id){
-    #     df <- start_and_ends %>% filter(shape_id == location)
-    #     outputMap <- outputMap %>% 
-    #     addAwesomeMarkers(
-    #       data = df, lng = ~lon, lat = ~lat,
-    #       label = 'start/end',
-    #       icon = awesomeIcons(
-    #         text = 'R',
-    #         markerColor = 'green',
-    #         iconColor = 'white'
-    #         )
-    #       )
-    #   }
-    # }
     
     # Bus depots
     depots_df <- depots() %>%
@@ -401,6 +402,15 @@ shinyServer(function(input, output, session) {
           markerColor = '#D60000',
           iconColor = 'white'
         )
+      ) 
+    
+    outputMap <- outputMap %>% 
+      addLegend(
+        "bottomleft", 
+        colors = c('#70A432', '#D43E2A', '#FFBA00'), 
+        labels = c('Route', 'Dead Trip', 'Dead Leg'),
+        title = NULL,
+        opacity = 1
       )
     
     map_class$class <- 'map-box'
@@ -416,7 +426,7 @@ shinyServer(function(input, output, session) {
   })
   
   output$showRoutePlots <- renderUI({
-    div(plotlyOutput('distancePlot'), style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;')
+    div(plotlyOutput('distancePlot', height = 200), style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;')
   })
   
   # Create a reactive to store dead trip shape data
@@ -424,7 +434,11 @@ shinyServer(function(input, output, session) {
   dead_shapes_reactive <- reactiveValues(data = NULL, stats = NULL)
   
   output$showDeadTripInfo <- renderUI({
-    div(verbatimTextOutput('deadTripTable'), style = 'margin: 20px; margin-right: 40px;')
+    div(
+      div('Dead Trips & Legs', class = 'title-header'),
+      div(verbatimTextOutput('deadLegTable'), style = 'margin: 20px; margin-left: 40px; margin-right: 72px;'),
+      div(verbatimTextOutput('deadTripTable'), style = 'margin: 20px; margin-left: 40px; margin-right: 72px;')
+    )
   })
   
   output$deadTripTable <- renderPrint({
@@ -432,6 +446,14 @@ shinyServer(function(input, output, session) {
       'No dead trip data...'
     } else {
       dead_shapes_reactive$stats  
+    }
+  })
+  
+  output$deadLegTable <- renderPrint({
+    if (is.null(dead_shapes_reactive$legs)){
+      'No dead leg data...'
+    } else {
+      dead_shapes_reactive$leg_stats  
     }
   })
   
@@ -497,13 +519,51 @@ shinyServer(function(input, output, session) {
       dead_shapes_reactive$data <- NULL
       dead_shapes_reactive$stats <- NULL
     }
-     
+    
+    con <- poolCheckout(conPool)
+    selected_service <- unique(tripsData()$service_id[1])
+    query <- paste0("SELECT * FROM dead_leg_summary WHERE route_id = '", input$selected_route, 
+                    "' AND quasi_block =", input$selected_block, " AND service_id = '", selected_service, "'")
+    dead_legs <- DBI::dbGetQuery(con, query) %>% 
+      unique()
+    
+    query <- paste0("SELECT * FROM dead_leg_shapes WHERE dead_trip_unique_id IN (", paste0(sprintf("%s", unique(dead_legs$dead_leg_unique_id)), collapse = ', '), ")")
+    dead_leg_shapes <- DBI::dbGetQuery(con, query)  %>%
+      arrange(dead_trip_unique_id, point_order)
+    
+    dead_shapes_reactive$legs <- dead_leg_shapes
+    
+    dead_shapes_reactive$leg_stats <- dead_legs %>%
+      left_join(dead_leg_shapes, by = c('dead_leg_unique_id' = 'dead_trip_unique_id')) %>%
+      mutate('id' = dead_leg_unique_id) %>%
+      select(id, start, end, route_id, quasi_block, distance_km, time_hrs) %>%
+      unique() %>%
+      mutate(distance_km = round(distance_km, 2)) %>%
+      mutate(time_hrs = round(time_hrs, 2))
+    
+    print(head(dead_shapes_reactive$legs))
+    poolReturn(con)
+    
+    legs_df <- dead_shapes_reactive$leg_stats
+    distance_vec <- c(0, legs_df$distance_km[legs_df$start == 'Simmonscourt'] * 1000, tail(data$distance, (length(data$distance) - 1)), legs_df$distance_km[legs_df$start != 'Simmonscourt'] * 1000)
+    
     # Get the cumulative sum of distance & convert back to km
-    data$distance <- cumsum(data$distance) / 1000
+    distance_vec <- cumsum(distance_vec) / 1000
+    
+    new_start <- head(data$time_axis, 1) - (legs_df$time_hrs[legs_df$start == 'Simmonscourt'] *60 * 60)
+    new_end <- tail(data$time_axis, 1) + (legs_df$time_hrs[legs_df$start != 'Simmonscourt'] * 60 * 60)
+    time_vec <- c(new_start, data$time_axis, new_end)
+    
+    data_plot <- data.frame(
+      distance = distance_vec,
+      time_axis = time_vec
+    )
+    
+    print(tail(data_plot))
     
     # Now create the plot using Plotly
     p <- plot_ly(
-      data, 
+      data_plot, 
       x = ~time_axis, 
       y = ~distance, 
       type = 'scatter', 
@@ -534,7 +594,7 @@ shinyServer(function(input, output, session) {
       font = list(size = 11),
       xaxis = list(
         title = '',
-        range = c(min(data$time_axis), max(data$time_axis) + (2*60*60)),
+        range = ~c(min(time_axis), max(time_axis) + (2*60*60)),
         type = 'date',
         tickformat = "%H:%M",
         margin = list(pad = 5)
@@ -556,24 +616,33 @@ shinyServer(function(input, output, session) {
       data <- stops() %>% filter(quasi_block == input$selected_block)  
     }
     
+    data <- data %>%
+      select(-route_id, -service_id, -shape_dist_traveled, -quasi_block) %>%
+      rename('direction' = direction_id)
+    
+    data$direction[data$direction == 'I'] <- 'In'
+    data$direction[data$direction == 'O'] <- 'Out'
+    
     reactable(
       data,
       filterable = FALSE,
       searchable = TRUE,
-      #defaultSorted = list(BudgetSpent = "desc"),
-      selection = "single",
-      selectionId = "tableId1",
       defaultPageSize = 1000,
-      showPageSizeOptions = TRUE,
-      pageSizeOptions = c(10, 20, 50, 250, 500, 1000),
-      onClick = "select",
+      pagination = FALSE,
+      height = 330,
       resizable = TRUE,
       bordered = TRUE,
       highlight = TRUE,
       wrap = FALSE,
+      fullWidth = TRUE,
       class = "react-table",
       rowStyle = list(cursor = "pointer"),
-      defaultColDef = colDef(headerStyle = list(background = "#f7f7f8"))
+      defaultColDef = colDef(
+        headerStyle = list(background = "#f7f7f8")
+        ),
+      columns = list(
+        trip_id = colDef(width = 180)
+      )
     )
   })
 }) 

@@ -195,6 +195,7 @@ for (route in routesVector){
       dead_legs_out_add <- data.frame(
         dead_leg_id = l,
         route_id = route,
+        service_id = stop_analysis_df$service_id,
         quasi_block = b,
         start_depot = DEFAULT_DEPOT,
         block_first_stop_id =  stop_analysis_df$block_first_stop_id,
@@ -255,12 +256,12 @@ dead_legs_out_2 <- dead_legs_out %>%
 
 dead_legs_out_mod <- rbind(dead_legs_out_1, dead_legs_out_2) %>%
   select(-dead_leg_id) %>%
-  select(route_id, quasi_block, start, end) %>%
+  select(route_id, quasi_block, service_id, start, end) %>%
   unique()
   #mutate(dead_leg_unique_id = sequence(n())) %>%
   
 dead_legs_out_unique <- dead_legs_out_mod %>%
-  select(-route_id, -quasi_block) %>%
+  select(-route_id, -quasi_block, -service_id) %>%
   unique() %>%
   mutate(dead_leg_unique_id = sequence(n()))
 
@@ -268,7 +269,7 @@ dead_legs_out_unique <- dead_legs_out_mod %>%
 dead_legs_out_mod$dead_leg_unique_id <- NA
 
 # No loop through and assign the unique ids to the stop analysis data frame
-for (row in sequence(nrow(dead_legs_out_mod))){
+for (row in sequence(nrow(dead_legs_out_unique))){
   dead_legs_out_mod$dead_leg_unique_id[dead_legs_out_mod$start == dead_legs_out_unique$start[row] & 
                                          dead_legs_out_mod$end == dead_legs_out_unique$end[row]] <- dead_legs_out_unique$dead_leg_unique_id[row]
 }
@@ -328,10 +329,10 @@ for (i in 1:length(chunkList)){
   print(paste0("Processing Batch ", i, " of ", length(chunkList)))
   if (i == 1){
     print('Creating & writing to database table...')
-    DBI::dbWriteTable(con, name = 'dead_leg_log', value = chunkList[[i]], overwrite = TRUE, row.names = FALSE)  
+    DBI::dbWriteTable(con, name = 'dead_leg_summary', value = chunkList[[i]], overwrite = TRUE, row.names = FALSE)  
   } else {
     print('Appending data to database table...')
-    DBI::dbWriteTable(con, name = 'dead_leg_log', value = chunkList[[i]], append = TRUE, row.names = FALSE)  
+    DBI::dbWriteTable(con, name = 'dead_leg_summary', value = chunkList[[i]], append = TRUE, row.names = FALSE)  
   }
 }  
 

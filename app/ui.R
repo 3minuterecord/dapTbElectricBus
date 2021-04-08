@@ -35,16 +35,12 @@ body <- dashboardBody(
               column(6,
                 div(uiOutput('showRouteSelectorControls'), style = 'margin-left: 14px; margin-top: 5px; display: inline-block;'),
                 div(uiOutput('showBlockSelectorControls'), style = 'margin-left: 14px; margin-top: 5px; display: inline-block;'),
-                div(uiOutput('showMainBusMap'))
+                div(uiOutput('showMainBusMap')),
+                div(uiOutput('showTripTable'))
               ),
               column(6, 
                 div(uiOutput('showDeadTripInfo')),     
                 div(uiOutput('showRoutePlots'))     
-              )
-            ),
-            fluidRow(
-              column(12,
-                div(uiOutput('showTripTable'))
               )
             ),
             br(), br(), br(), br(), br(), br(), br(), br()

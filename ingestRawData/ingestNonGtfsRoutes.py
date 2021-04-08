@@ -212,7 +212,7 @@ dead_trip_log_df = getRouteInfo(
 
 #%%
 # Now Focus on Dead Leg Route Data
-query = 'SELECT * FROM dead_leg_log'   
+query = 'SELECT * FROM dead_leg_summary'   
 dead_legs = pd.read_sql_query(query, conn)
 dead_legs_unique = dead_legs[['dead_leg_unique_id', 'start', 'end']].drop_duplicates()
 # Reset the index after dropping rows

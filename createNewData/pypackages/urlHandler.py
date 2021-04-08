@@ -25,7 +25,7 @@ class UrlHandler():
         for index,row in shapeData.iterrows():
             longlatdict = {}
             longlatdict["latitude"] = row[1]
-            longlatdict["longitude"] = row[1]
+            longlatdict["longitude"] = row[2]
             listofLocations.append(longlatdict.copy())
         locationDict["locations"] = listofLocations
         return locationDict

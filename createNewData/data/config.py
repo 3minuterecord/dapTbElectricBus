@@ -3,7 +3,7 @@ import os
 #---------------------------------------
 # URL's
 #---------------------------------------
-url = 'https://api.open-elevation.com/api/v1/looku'
+url = 'https://api.open-elevation.com/api/v1/lookup'
 
 
 #---------------------------------------
@@ -36,7 +36,6 @@ MongoQuote = f'''mongodb://{MongoUser}:{MongoPass}==@{MongoLocation}/?ssl=true&r
 # Local Folder Locations
 #---------------------------------------
 shapes = r"C:\Users\James\Documents\MSc in Data Analytics\Database and Ananytics\Research Project\dapTbElectricDublinBus\ingestRawData\raw\shapes.txt"
-shapesname = ["shapes"]
 
 
 #---------------------------------------

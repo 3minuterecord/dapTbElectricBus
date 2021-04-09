@@ -458,11 +458,24 @@ shinyServer(function(input, output, session) {
       mutate(time_axis = departure_time)
     
     # Handling for times greater than 24 hrs, e.g., 28:30:00
+    # Start by giving all days a flag of 1 (first day)
     data$day_flag <- 1
-    data$day_flag[data$time_secs > (1 * 24 * 60 * 60)] <- 2 # change flag for days greater than 24 hrs
-    data$day_flag[data$time_secs > (2 * 24 * 60 * 60)] <- 3 # change flag for days greater than 48 hrs
+    # Use regular expression to identify locations of times greater than 24 hr
+    high_times_loc <- grepl("^[2-9][4-9]:", data$departure_time)
+    # If there are times greater than 24 hrs, assign a new day flag, e.g., 2, 3, 4, n days
+    if (sum(high_times_loc) != 0){
+      high_times <- data$departure_time[high_times_loc]
+      high_times_hrs <- as.integer(substr(high_times, 1, 2))
+      day_count <- ceiling(max(high_times_hrs)) # round up to nearest day 
+      # Iterate & add day flags
+      for (days in sequence(day_count)){
+        data$day_flag[data$time_secs > (days * 24 * 60 * 60)] <- (days + 1) # change flag for days greater than days x 24 hrs
+      }
+    }
     
-    # Use regular expression to select & modify times/hrs greater than 2
+    # Now that day flags/markers are in place, we can re-base the hours
+    # e.g., convert 24:30:30 to 00:30:30
+    # Use regular expression to select & modify times/hrs greater than 24
     mod_times <- c()
     for (time in data$departure_time[grepl("^2[4-9]:", data$departure_time)]){
       hr <- as.integer(substr(time, 1, 2))

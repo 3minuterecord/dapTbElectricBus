@@ -62,3 +62,10 @@ getDbPool <- function(dbName = NA, serverName = NA) {
   }
   return(pool::dbPool(odbc::odbc(), .connection_string = formConnectionString(dbName, serverName, USERNAME, passwordDb_config$password)))
 }
+
+getDbData <- function (query, connection_pool){
+  con <- pool::poolCheckout(connection_pool)
+  data <- DBI::dbGetQuery(con, query)
+  poolReturn(con)
+  return(data)
+}

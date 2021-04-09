@@ -83,6 +83,13 @@ getDbPool <- function(dbName = NA, serverName = NA) {
   return(pool::dbPool(odbc::odbc(), .connection_string = formConnectionString(dbName, serverName, USERNAME, passwordDb_config$password)))
 }
 
+getDbData <- function (query, connection_pool){
+  con <- pool::poolCheckout(connection_pool)
+  data <- DBI::dbGetQuery(con, query)
+  poolReturn(con)
+  return(data)
+}
+
 toSeconds <- function(x){
   if (!is.character(x)) stop("x must be a character string of the form H:M:S")
   if (length(x)<=0)return(x)

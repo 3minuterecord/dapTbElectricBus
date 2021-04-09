@@ -659,7 +659,6 @@ shinyServer(function(input, output, session) {
     reactable(
       data,
       filterable = FALSE,
-      searchable = TRUE,
       defaultPageSize = 1000,
       pagination = FALSE,
       height = 330,

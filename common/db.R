@@ -70,7 +70,7 @@ getDbData <- function (query, connection_pool){
   return(data)
 }
 
-saveByChunk <- function(chunk_size, dat, table_name, connection_pool) {
+saveByChunk <- function(chunk_size, dat, table_name, connection_pool, replace = TRUE) {
   con <- pool::poolCheckout(connection_pool)
   # Save data in chunks so that progress can be tracked
   # Split the data frame into chunks of chunk size or less
@@ -78,7 +78,7 @@ saveByChunk <- function(chunk_size, dat, table_name, connection_pool) {
   # Now write each data chunk to the database 
   for (i in 1:length(chunkList)){
     print(paste0("Processing Batch ", i, " of ", length(chunkList)))
-    if (i == 1){
+    if (i == 1 & replace == TRUE){
       print('Creating & writing to database table...')
       write <- DBI::dbWriteTable(con, name = table_name, value = chunkList[[i]], overwrite = TRUE, row.names = FALSE)  
       if(write){

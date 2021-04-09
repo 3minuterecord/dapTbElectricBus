@@ -308,7 +308,8 @@ saveByChunk(
   chunk_size = 500, 
   dat = blocks, 
   table_name = 'blocks', 
-  connection_pool = conPool
+  connection_pool = conPool,
+  replace = TRUE
 )
 
 # Save the Dead Leg Data to the data base 
@@ -317,5 +318,6 @@ saveByChunk(
   chunk_size = 500, 
   dat = dead_legs_out_mod, 
   table_name = 'dead_leg_summary', 
-  connection_pool = conPool
+  connection_pool = conPool,
+  replace = TRUE
 )

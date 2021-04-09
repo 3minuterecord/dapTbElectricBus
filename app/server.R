@@ -620,8 +620,8 @@ shinyServer(function(input, output, session) {
       select(-route_id, -service_id, -shape_dist_traveled, -quasi_block) %>%
       rename('direction' = direction_id)
     
-    data$direction[data$direction == 'I'] <- 'In'
-    data$direction[data$direction == 'O'] <- 'Out'
+    data$direction[data$direction == '1'] <- 'In'
+    data$direction[data$direction == '0'] <- 'Out'
     
     reactable(
       data,
@@ -639,9 +639,21 @@ shinyServer(function(input, output, session) {
       rowStyle = list(cursor = "pointer"),
       defaultColDef = colDef(
         headerStyle = list(background = "#f7f7f8")
-        ),
+      ),
       columns = list(
-        trip_id = colDef(width = 180)
+        trip_id = colDef(width = 200),
+        direction = colDef(
+          cell = function(value) {
+            if (value == 'Out') "\u2B9E" else "\u2B9C"
+          },
+          style = function(value) {
+            if (value == 'Out') {
+              color <- "#1C2D38"
+            } else if (value == 'In') {
+              color <- "#C1C1C1"
+            }
+          list(fontWeight = 600, color = color)
+        })
       )
     )
   })

@@ -611,7 +611,7 @@ shinyServer(function(input, output, session) {
     p <- p %>% add_text(
       x = ~max(time_axis),
       y = ~max(distance),
-      mode = 'lines + text',
+      mode = 'text',
       text = ~paste0("<b> ", round(max(distance), 1), 'km <b>'),
       textposition = 'right',
       textfont = list(color = '#000000', size = 13)

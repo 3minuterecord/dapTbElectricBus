@@ -10,7 +10,6 @@ PORT <- 1433
 USERNAME <- "teamadmin"
 
 conPool <- getDbPool(DATABASE)
-con <- poolCheckout(conPool)
 
 toSeconds <- function(x){
   if (!is.character(x)) stop("x must be a character string of the form H:M:S")
@@ -31,24 +30,23 @@ toSeconds <- function(x){
   )  
 } 
 
-getStopName <- function(stop_id, connection){
+getStopName <- function(stop_id, connection_pool){
+  con <- poolCheckout(connection_pool)
   query <- paste0("SELECT stop_name from stops WHERE stop_id = '", stop_id, "'")
   stop_name <- DBI::dbGetQuery(connection, query)$stop_name[1]
+  pool::poolReturn(con)
   rm(query)
   return(stop_name)
 }
 
 
 # Get bus depot coordinates
-query <- "SELECT * FROM depots"
-depots <- DBI::dbGetQuery(con, query)
-rm(query)
+depots <- getDbData("SELECT * FROM depots", conPool)
+
 
 # Vector of all routes that have trips with details
-query <- "SELECT DISTINCT route_id FROM trips"
-routesDf <- DBI::dbGetQuery(con, query)
+routesDf <- getDbData("SELECT DISTINCT route_id FROM trips", conPool)
 routesVector <- routesDf$route_id
-rm(query)
 
 # Set options digits to its usual defualt
 options(digits = 7)
@@ -64,9 +62,7 @@ blocks <- data.frame()
 for (route in routesVector){
   print(paste0('Route ', which(routesVector %in% route), ' of ', length(routesVector)))
   # Trips 
-  query <- paste0("SELECT trip_id, service_id FROM trips WHERE route_id = '", route, "'")
-  tripsData <- DBI::dbGetQuery(con, query)
-  rm(query)
+  tripsData <- getDbData("SELECT trip_id, service_id FROM trips WHERE route_id = '", route, "'", conPool)
   
   # Loop through for each service id
   serviceVector <- unique(tripsData$service_id)
@@ -77,23 +73,29 @@ for (route in routesVector){
     s.stop_id, s.stop_headsign, s.shape_dist_traveled, t.direction_id  
     FROM trips t LEFT JOIN stop_times s ON t.trip_id = s.trip_id WHERE t.trip_id IN (",
                     paste0(sprintf("'%s'", unique(tripsData$trip_id)), collapse = ', '), ") AND t.service_id = '", service, "'")
-    stops <- DBI::dbGetQuery(con, query) %>% arrange(trip_id)
+    stops <- getDbData(query, conPool) %>% arrange(trip_id)
     
     if(nrow(stops) != 0){
       # Create quasi block number data based on departure time diffs
       stops$diff_time <- c(0, diff(toSeconds(stops$departure_time)))
-      stops$quasi_block <- ifelse(stops$diff_time < 0, 1, 0) 
+      # Less than zero indicates a break, i.e., block end
+      # The start of the next trip is behind the end of the last trip
+      # Not feasible for the same bus to make the trip, new block required
+      stops$quasi_block <- ifelse(stops$diff_time < 0, 1, 0)
       stops$arrive_to_seconds <- toSeconds(stops$arrival_time)
       stops$depart_to_seconds <- toSeconds(stops$departure_time)
       
       bounds <- length(stops$quasi_block[stops$quasi_block == 1])
       stops$quasi_block[stops$quasi_block == 1] <- (2:(bounds + 1))
       stops$quasi_block[1] <- 1
+      # Fill zeroes with NA so we can use NA last observation carry forward from zoo 
       stops$quasi_block <- ifelse(stops$quasi_block == 0, NA, stops$quasi_block)
       stops$quasi_block <- zoo::na.locf(stops$quasi_block)
     }
     print(head(stops))
-   
+    
+    # Create a trip id order field
+    # This helps with grouping by trips in each block
     stops$trip_id_order <- paste0(stops$trip_id, '_', stops$quasi_block)
     trips_bounds <- c(1, cumsum(rle(stops$trip_id_order)$lengths))
     
@@ -107,6 +109,7 @@ for (route in routesVector){
     
     # Create data frame of aggregated data for trip & block groupings
     stops <- stops %>%
+      # By TRIP
       group_by(trip_id_order) %>%
       mutate(trip_distance = max(shape_dist_traveled)) %>%
       mutate(trip_start = head(arrival_time, 1)) %>%
@@ -116,6 +119,7 @@ for (route in routesVector){
       mutate(trip_total_time_s = tail(depart_to_seconds, 1) - head(arrive_to_seconds, 1)) %>%
       mutate(trip_total_time_hrs = round(trip_total_time_s / (60 * 60), 2)) %>%
       ungroup() %>%
+      # By BLOCK
       group_by(quasi_block) %>%
       mutate(block_start = head(arrival_time, 1)) %>%
       mutate(block_end = tail(departure_time, 1)) %>%
@@ -125,6 +129,7 @@ for (route in routesVector){
       mutate(block_first_stop_name = getStopName(head(block_first_stop_id, 1), con)) %>%
       mutate(block_last_stop_id = tail(stop_id, 1)) %>%
       mutate(block_last_stop_name = getStopName(head(block_last_stop_id, 1), con)) %>%
+      # Now select the required fields
       select(route_id, trip_id, trip_id_order, service_id, trip_distance, trip_start, trip_end, trip_total_time_s, trip_total_time_hrs, 
              trip_first_stop_id, trip_last_stop_id, quasi_block, block_start, 
              block_end, block_total_time_s, block_total_time_hrs, block_first_stop_id, 
@@ -191,7 +196,10 @@ for (route in routesVector){
           rm(stop_analysis_out_add)
         }
       }
-      # Block to depot dead legs
+      # Also create a data frame for block to depot trips, i.e., dead legs
+      # There will be two dead legs per block, one at the start > depot to first stop
+      # & one at the end of the block > last stop to depot
+      # Assume for now that all buses are stationed in one depote, i.e., DEFAULT_DEPOT 
       dead_legs_out_add <- data.frame(
         dead_leg_id = l,
         route_id = route,
@@ -212,15 +220,15 @@ for (route in routesVector){
 
 # Unique Dead Trips
 # =================
-# get the number of unique dead trips and use this to create a unique dead trip
-# if for later referencing in Azure Maps data call
+# Get the number of unique dead trips and use this to create a 
+# unique dead trip id for later referencing in Azure Maps data call
 check_count_dead_trips <- stop_analysis_out %>%
   select(trip_first_stop_id, trip_last_stop_id) %>%
   unique() %>%
   mutate(dead_trip_unique_id = sequence(n()))
 nrow(check_count_dead_trips)
 
-# Add a field for this unique id to the stop out dataframe, initialize as NA
+# Add a field for this unique id to the stop_out dataframe, initialize as NA
 stop_analysis_out$dead_trip_unique_id <- NA
 
 # No loop through and assign the unique ids to the stop analysis data frame
@@ -231,8 +239,7 @@ for (row in sequence(nrow(check_count_dead_trips))){
 
 # Check that this has been correctly applied
 test <- stop_analysis_out %>%
-  select(trip_first_stop_id, trip_last_stop_id, dead_trip_unique_id) %>%
-  unique()
+  select(trip_first_stop_id, trip_last_stop_id, dead_trip_unique_id) %>% unique()
 if (sum(test != check_count_dead_trips) == 0){
   print('Check is good, exact match with source unique list')
 } else {
@@ -241,8 +248,8 @@ if (sum(test != check_count_dead_trips) == 0){
 
 # Unique Dead Legs
 # ================
-# get the number of unique dead legs & use this to create a unique dead leg
-# id for later referencing in Azure Maps data call
+# Get the number of unique dead legs & use this to create a unique 
+# dead leg id for later referencing in Azure Maps data call
 
 dead_legs_out_1 <- dead_legs_out %>%
   rename('start' = start_depot) %>%
@@ -258,7 +265,6 @@ dead_legs_out_mod <- rbind(dead_legs_out_1, dead_legs_out_2) %>%
   select(-dead_leg_id) %>%
   select(route_id, quasi_block, service_id, start, end) %>%
   unique()
-  #mutate(dead_leg_unique_id = sequence(n())) %>%
   
 dead_legs_out_unique <- dead_legs_out_mod %>%
   select(-route_id, -quasi_block, -service_id) %>%
@@ -268,16 +274,15 @@ dead_legs_out_unique <- dead_legs_out_mod %>%
 # Add a field for this unique id to the stop out dataframe, initialize as NA
 dead_legs_out_mod$dead_leg_unique_id <- NA
 
-# No loop through and assign the unique ids to the stop analysis data frame
+# No loop through and assign the unique ids to the dead legss data frame
 for (row in sequence(nrow(dead_legs_out_unique))){
   dead_legs_out_mod$dead_leg_unique_id[dead_legs_out_mod$start == dead_legs_out_unique$start[row] & 
                                          dead_legs_out_mod$end == dead_legs_out_unique$end[row]] <- dead_legs_out_unique$dead_leg_unique_id[row]
 }
 
 
-# Save the stop_analysis_out data frame to the data base 
-# =============================================
-
+# Save the stop_analysis_out data frame to the Azure SQL db 
+# =========================================================
 # Save data in chunks so that progress can be tracked
 chunkSize <- 500 # number of rows to save in each batch
 # Split the data frame into chunks of chunk size or less
@@ -298,42 +303,19 @@ for (i in 1:length(chunkList)){
 
 # Save the aggregated blocks data frame to the data base 
 # ======================================================
-
-# Save data in chunks so that progress can be tracked
-chunkSize <- 500 # number of rows to save in each batch
-# Split the data frame into chunks of chunk size or less
-chunkList <- split(blocks, (seq(nrow(blocks))-1) %/% chunkSize)
-
-# Now write each data chunk to the database 
-for (i in 1:length(chunkList)){
-  print(paste0("Processing Batch ", i, " of ", length(chunkList)))
-  if (i == 1){
-    print('Creating & writing to database table...')
-    DBI::dbWriteTable(con, name = 'blocks', value = chunkList[[i]], overwrite = TRUE, row.names = FALSE)  
-  } else {
-    print('Appending data to database table...')
-    DBI::dbWriteTable(con, name = 'blocks', value = chunkList[[i]], append = TRUE, row.names = FALSE)  
-  }
-}  
+# use saveByChunk function from db.R
+saveByChunk(
+  chunk_size = 500, 
+  dat = blocks, 
+  table_name = 'blocks', 
+  connection_pool = conPool
+)
 
 # Save the Dead Leg Data to the data base 
-# ======================================================
-
-# Save data in chunks so that progress can be tracked
-chunkSize <- 500 # number of rows to save in each batch
-# Split the data frame into chunks of chunk size or less
-chunkList <- split(dead_legs_out_mod, (seq(nrow(dead_legs_out_mod))-1) %/% chunkSize)
-
-# Now write each data chunk to the database 
-for (i in 1:length(chunkList)){
-  print(paste0("Processing Batch ", i, " of ", length(chunkList)))
-  if (i == 1){
-    print('Creating & writing to database table...')
-    DBI::dbWriteTable(con, name = 'dead_leg_summary', value = chunkList[[i]], overwrite = TRUE, row.names = FALSE)  
-  } else {
-    print('Appending data to database table...')
-    DBI::dbWriteTable(con, name = 'dead_leg_summary', value = chunkList[[i]], append = TRUE, row.names = FALSE)  
-  }
-}  
-
-
+# =======================================
+saveByChunk(
+  chunk_size = 500, 
+  dat = dead_legs_out_mod, 
+  table_name = 'dead_leg_summary', 
+  connection_pool = conPool
+)

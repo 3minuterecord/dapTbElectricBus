@@ -4,8 +4,8 @@ library(rjson)
 library(dplyr)
 
 # The app's database (SQL azure)
-DATABASE <- "electricbus-eastus-prod-temp"
-DEFAULT_SERVER <- "electricbus-temp.database.windows.net"
+DATABASE <- "electricbus-eastus-prod"
+DEFAULT_SERVER <- "electricbus.database.windows.net"
 PORT <- 1433
 USERNAME <- "teamadmin"
 
@@ -30,19 +30,8 @@ toSeconds <- function(x){
   )  
 } 
 
-getStopName <- function(stop_id, connection_pool){
-  con <- poolCheckout(connection_pool)
-  query <- paste0("SELECT stop_name from stops WHERE stop_id = '", stop_id, "'")
-  stop_name <- DBI::dbGetQuery(connection, query)$stop_name[1]
-  pool::poolReturn(con)
-  rm(query)
-  return(stop_name)
-}
-
-
 # Get bus depot coordinates
 depots <- getDbData("SELECT * FROM depots", conPool)
-
 
 # Vector of all routes that have trips with details
 routesDf <- getDbData("SELECT DISTINCT route_id FROM trips", conPool)
@@ -62,7 +51,7 @@ blocks <- data.frame()
 for (route in routesVector){
   print(paste0('Route ', which(routesVector %in% route), ' of ', length(routesVector)))
   # Trips 
-  tripsData <- getDbData("SELECT trip_id, service_id FROM trips WHERE route_id = '", route, "'", conPool)
+  tripsData <- getDbData(paste0("SELECT trip_id, service_id FROM trips WHERE route_id = '", route, "'"), conPool)
   
   # Loop through for each service id
   serviceVector <- unique(tripsData$service_id)
@@ -126,9 +115,9 @@ for (route in routesVector){
       mutate(block_total_time_s = tail(depart_to_seconds, 1) - head(arrive_to_seconds, 1)) %>%
       mutate(block_total_time_hrs = round(block_total_time_s / (60 * 60), 2)) %>%
       mutate(block_first_stop_id = head(stop_id, 1)) %>%
-      mutate(block_first_stop_name = getStopName(head(block_first_stop_id, 1), con)) %>%
+      mutate(block_first_stop_name = getStopName(head(block_first_stop_id, 1), conPool)) %>%
       mutate(block_last_stop_id = tail(stop_id, 1)) %>%
-      mutate(block_last_stop_name = getStopName(head(block_last_stop_id, 1), con)) %>%
+      mutate(block_last_stop_name = getStopName(head(block_last_stop_id, 1), conPool)) %>%
       # Now select the required fields
       select(route_id, trip_id, trip_id_order, service_id, trip_distance, trip_start, trip_end, trip_total_time_s, trip_total_time_hrs, 
              trip_first_stop_id, trip_last_stop_id, quasi_block, block_start, 
@@ -283,22 +272,14 @@ for (row in sequence(nrow(dead_legs_out_unique))){
 
 # Save the stop_analysis_out data frame to the Azure SQL db 
 # =========================================================
-# Save data in chunks so that progress can be tracked
-chunkSize <- 500 # number of rows to save in each batch
-# Split the data frame into chunks of chunk size or less
-chunkList <- split(stop_analysis_out, (seq(nrow(stop_analysis_out))-1) %/% chunkSize)
-
-# Now write each data chunk to the database 
-for (i in 1:length(chunkList)){
-  print(paste0("Processing Batch ", i, " of ", length(chunkList)))
-  if (i == 1){
-    print('Creating & writing to database table...')
-    DBI::dbWriteTable(con, name = 'stop_analysis', value = chunkList[[i]], overwrite = TRUE, row.names = FALSE)  
-  } else {
-    print('Appending data to database table...')
-    DBI::dbWriteTable(con, name = 'stop_analysis', value = chunkList[[i]], append = TRUE, row.names = FALSE)  
-  }
-} 
+# use saveByChunk function from db.R
+saveByChunk(
+  chunk_size = 500, 
+  dat = stop_analysis_out, 
+  table_name = 'stop_analysis', 
+  connection_pool = conPool,
+  replace = TRUE
+)
 
 
 # Save the aggregated blocks data frame to the data base 
@@ -314,6 +295,7 @@ saveByChunk(
 
 # Save the Dead Leg Data to the data base 
 # =======================================
+# use saveByChunk function from db.R
 saveByChunk(
   chunk_size = 500, 
   dat = dead_legs_out_mod, 

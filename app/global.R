@@ -15,11 +15,11 @@ library(rjson)
 library(viridis)
 
 # The app's database (SQL azure)
-DATABASE <- "electricbus-eastus-prod-temp"
+DATABASE <- "electricbus-eastus-prod"
 
 "%+%" <- function(...) paste0(...)
 
-DEFAULT_SERVER <- "electricbus-temp.database.windows.net"
+DEFAULT_SERVER <- "electricbus.database.windows.net"
 PORT <- 1433
 USERNAME <- "teamadmin"
 

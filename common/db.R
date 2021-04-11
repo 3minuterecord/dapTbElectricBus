@@ -98,3 +98,12 @@ saveByChunk <- function(chunk_size, dat, table_name, connection_pool, replace = 
   }
   poolReturn(con)
 }
+
+getStopName <- function(stop_id, connection_pool){
+  con <- poolCheckout(connection_pool)
+  query <- paste0("SELECT stop_name from stops WHERE stop_id = '", stop_id, "'")
+  stop_name <- DBI::dbGetQuery(con, query)$stop_name[1]
+  pool::poolReturn(con)
+  rm(query)
+  return(stop_name)
+}

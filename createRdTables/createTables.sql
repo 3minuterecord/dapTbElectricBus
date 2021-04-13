@@ -28,3 +28,24 @@ ON dead_leg_shapes (dead_trip_unique_id);
 
 CREATE INDEX idx_stop_id_id
 ON stops (stop_id);
+
+CREATE INDEX idx_route_id
+ON distances (route_id);
+
+CREATE INDEX idx_service_id
+ON distances (service_id);
+
+CREATE INDEX idx_block_num
+ON distances (quasi_block);
+
+CREATE INDEX idx_route_id
+ON stop_analysis (route_id);
+
+CREATE INDEX idx_service_id
+ON stop_analysis (service_id);
+
+CREATE INDEX idx_block_num
+ON stop_analysis (quasi_block);
+
+CREATE INDEX idx_route_id
+ON bus_routes (route_id);

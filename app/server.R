@@ -25,7 +25,7 @@ shinyServer(function(input, output, session) {
   
   # Get a vector of unique routes that have trips specified
   routesVector <- reactive({
-    data <- getDbData("SELECT DISTINCT route_id FROM trips", conPool)
+    data <- getDbData("SELECT DISTINCT route_id FROM trips", conPool) %>% arrange(route_id)
     return(data$route_id)
   })
   
@@ -40,23 +40,25 @@ shinyServer(function(input, output, session) {
     return(data$route_short_name)
   })
   
-  # Get trip details for the selected route
-  tripsData <- reactive({
-    selected_route <- input$selected_route
+  # Get the service_id options for the selected route
+  services <- reactive({
+    # Route is selected from the UI, hence use of routeCounter reactive
+    selected_route <- routesVector()[routeVectorCounter$num]
     data <- getDbData(
-      paste0("SELECT trip_id, service_id FROM trips WHERE route_id = '", selected_route, "'"), 
+      paste0("SELECT DISTINCT service_id FROM trips WHERE route_id = '", selected_route, "'"), 
       conPool
-      )
-    return(data)
+    ) %>% arrange(service_id)
+   
+    return(data$service_id)
   })
   
   stops <- reactive({
     req(input$selected_route)
-    selected_service <- unique(tripsData()$service_id[1])
+    req(input$selected_service)
     query <- paste0("SELECT t.route_id, t.trip_id, t.service_id, s.arrival_time, s.departure_time, 
     s.stop_id, s.stop_headsign, s.shape_dist_traveled, t.direction_id  
-    FROM trips t LEFT JOIN stop_times s ON t.trip_id = s.trip_id WHERE t.trip_id IN (",
-    paste0(sprintf("'%s'", unique(tripsData()$trip_id)), collapse = ', '), ") AND t.service_id = '", selected_service, "'")
+    FROM trips t LEFT JOIN stop_times s ON t.trip_id = s.trip_id WHERE t.route_id = '",
+    input$selected_route, "' AND t.service_id = '", input$selected_service, "'")
     
     # Important
     # =========
@@ -86,18 +88,27 @@ shinyServer(function(input, output, session) {
   
   stop_analysis <- reactive({
     req(input$selected_route)
-    # Selected route and service are defined by the UI 
-    selected_route <- input$selected_route
-    # TODO --- implement ability to change service id, hardcoded for now
-    # to first service id
-    selected_service <- unique(tripsData()$service_id[1])
-    query <- paste0("SELECT * FROM stop_analysis WHERE route_id = '", selected_route, "' AND service_id = '", selected_service, "'")
+    query <- paste0("SELECT * FROM stop_analysis WHERE route_id = '", input$selected_route, 
+                    "' AND service_id = '", input$selected_service, "' AND quasi_block = ", input$selected_block)
     data <- getDbData(query, conPool)
     return(data)
   })
   
+  # Get distance data
+  distanceData <- reactive({
+    query <- paste0("SELECT * FROM distances WHERE route_id = '", input$selected_route, "' 
+                    AND service_id = '", input$selected_service, 
+                    "' AND quasi_block = ", input$selected_block)
+    data <- getDbData(query, conPool)
+    return(data)
+  })
+  
+  # Get shape ids for the selected block
   shapeIds <- reactive({
     req(input$selected_block)
+    if(is.null(stops())){return(NULL)}
+    if(nrow(stops()) == 0){return(NULL)}
+    
     trips <- stops() %>% filter(quasi_block == input$selected_block)
     query <- paste0("SELECT shape_id FROM trips WHERE trip_id IN (", 
                     paste0(sprintf("'%s'", unique(trips$trip_id)), collapse = ', '), ")")
@@ -107,10 +118,65 @@ shinyServer(function(input, output, session) {
 
   # Get shapes details for the trips associated with the selected route
   shapeData <- reactive({
+    if(is.null(shapeIds())){return(NULL)}
     query <- paste0("SELECT shape_id, shape_pt_lat, shape_pt_lon FROM shapes WHERE shape_id IN (", 
                     paste0(sprintf("'%s'", shapeIds()), collapse = ', '), ")")
     data <- getDbData(query, conPool)
     return(data)
+  })
+  
+  deadLegShapes <- reactive({
+    # Get the dead leg data
+    query <- paste0("SELECT * FROM dead_leg_summary WHERE route_id = '", input$selected_route, 
+                    "' AND quasi_block =", input$selected_block, " AND service_id = '", input$selected_service, "'")
+    dead_legs <- getDbData(query, conPool) %>% unique()
+    
+    # Now the dead leg shape data
+    query <- paste0("SELECT * FROM dead_leg_shapes WHERE dead_trip_unique_id IN (", 
+                    paste0(sprintf("%s", unique(dead_legs$dead_leg_unique_id)), collapse = ', '), ")")
+    dead_leg_shapes <- getDbData(query, conPool) %>% arrange(dead_trip_unique_id, point_order)
+    
+    # Now create dead leg stats for display as verbatim print output on UI
+    dead_shapes_reactive$leg_stats <- dead_legs %>%
+      left_join(dead_leg_shapes, by = c('dead_leg_unique_id' = 'dead_trip_unique_id')) %>%
+      mutate('id' = dead_leg_unique_id) %>%
+      select(id, start, end, route_id, quasi_block, distance_km, time_hrs) %>%
+      unique() %>%
+      mutate(distance_km = round(distance_km, 2)) %>%
+      mutate(time_hrs = round(time_hrs, 2))
+    return(dead_leg_shapes)
+  })
+  
+  deadTripShapes <- reactive({
+    # Get dead trip details for selected route, service & block
+    deads <- stop_analysis() %>% 
+      mutate(dead_trip_id = as.integer(dead_trip_id)) %>%
+      mutate(dead_trip_unique_id = as.integer(dead_trip_unique_id))
+    
+    # If dead trip data exists, get the associated shape data
+    # Arrange by point order to ensure the route is correctly defined
+    if (nrow(deads) != 0){
+      query <- paste0("SELECT * FROM dead_trip_shapes WHERE dead_trip_unique_id IN (", 
+                      paste0(sprintf("'%s'", unique(deads$dead_trip_unique_id)), collapse = ', '), ")")
+      dead_routes <- getDbData(query, conPool) %>% 
+        mutate(dead_trip_unique_id = as.integer(dead_trip_unique_id)) %>%
+        arrange(point_order)
+      
+      # Reduce to just shape distance and time for join with stats
+      dead_routes_unique <- dead_routes %>%
+        select(dead_trip_unique_id, distance_km, time_hrs) %>%
+        unique()
+      
+      # Add to reactive to display as verbatim output
+      dead_shapes_reactive$stats <- deads %>%
+        left_join(dead_routes_unique, by = 'dead_trip_unique_id') %>%
+        select(trip_first_stop_id, trip_last_stop_id, dead_start, dead_end, dead_time_hrs, time_hrs, distance_km)
+    } else {
+      dead_shapes_reactive$stats <- NULL
+      dead_routes <- NULL
+    }
+    
+    return(dead_routes)
   })
   
   # Create UI elements for selecting route to visualize
@@ -135,13 +201,13 @@ shinyServer(function(input, output, session) {
         )), style = 'display: inline-block; vertical-align: top;'
       ),
       div(
-        # TODO --- remove disable when ability to select a service is implemented
-        shinyjs::disabled(textInput(
+        selectInput(
           'selected_service',
           'Service',
-          value = unique(tripsData()$service_id[1]),
-          width = 90
-        )), style = 'display: inline-block; vertical-align: top;'
+          choices = services(),
+          selected = services()[1],
+          width = 110
+        ), style = 'display: inline-block; vertical-align: top;'
       ),
       # Create forward and back buttons for faster navigation through the list of routes
       div(
@@ -284,7 +350,11 @@ shinyServer(function(input, output, session) {
   # dead trips, legs & home depot
   output$busGeoMap <- renderLeaflet({
     if(nrow(stops()) == 0){return(NULL)}
+    if(is.null(shapeIds())){return(NULL)}
+    
     req(input$selected_route)
+    req(input$selected_service)
+    req(input$selected_block)
     
     outputMap <- leaflet() %>%
       addFullscreenControl(position = "topleft", pseudoFullscreen = FALSE) %>%
@@ -303,11 +373,11 @@ shinyServer(function(input, output, session) {
     
     # Add dead leg routes as layer 1 (so they do not cover main route or dead trips)
     # Dead leg is a route from depot to/from block start/end
-    if (!is.null(dead_shapes_reactive$legs)){
-      dead_ids <- as.integer(unique(dead_shapes_reactive$legs$dead_trip_unique_id))
+    if (!is.null(deadLegShapes())){
+      dead_ids <- as.integer(unique(deadLegShapes()$dead_trip_unique_id))
       
       for (id_dead in dead_ids){
-        dead_df <- dead_shapes_reactive$legs %>% filter(dead_trip_unique_id == id_dead)
+        dead_df <- deadLegShapes() %>% filter(dead_trip_unique_id == id_dead)
         outputMap <- outputMap %>%
           addPolylines(
             data = dead_df,
@@ -347,10 +417,10 @@ shinyServer(function(input, output, session) {
     })
     
     # Now add data for the dead trips
-    if (!is.null(dead_shapes_reactive$trips)){
-      dead_ids <- unique(dead_shapes_reactive$trips$dead_trip_unique_id)
+    if (!is.null(deadTripShapes())){
+      dead_ids <- unique(deadTripShapes()$dead_trip_unique_id)
       for (id_dead in dead_ids){
-        dead_df <- dead_shapes_reactive$trips %>% filter(dead_trip_unique_id == id_dead)
+        dead_df <- deadTripShapes() %>% filter(dead_trip_unique_id == id_dead)
         outputMap <- outputMap %>%
           addPolylines(
             data = dead_df,
@@ -426,7 +496,7 @@ shinyServer(function(input, output, session) {
   
   # Use render print to display the data frames as verbatim output
   output$deadLegTable <- renderPrint({
-    if (is.null(dead_shapes_reactive$legs)){
+    if (is.null(dead_shapes_reactive$leg_stats)){
       'No dead leg data...'
     } else {
       dead_shapes_reactive$leg_stats  
@@ -445,154 +515,17 @@ shinyServer(function(input, output, session) {
   # Include dead trip & leg distances
   output$distancePlot <- renderPlotly({
     req(input$selected_block)
-    data <- stops() %>% filter(quasi_block == input$selected_block)  
     
-    # Prep data for time and distance modifications
-    # Some times could be greater than 24 hrs, e.g., 25:10:30
-    # Only times are provided, but days are required for (easier) plotting
-    # We need to add dead leg & trip distances to route distances & re-calc cumulative distance
-    data <- data %>%
-      mutate(time_secs = toSeconds(departure_time)) %>%
-      mutate(distance = shape_dist_traveled) %>%
-      mutate(type = 'route') %>%
-      mutate(time_axis = departure_time)
+    data_plot <- distanceData() %>%
+      # time was saved as BST hence adjusted to UTC
+      # Add the hour back now, BST is 1 hr ahead of UTC
+      # TODO --- regenerate db data with times as UTC and not BST
+      mutate(time_axis = time_axis + (1*60*60)) %>%
+      arrange(time_axis) %>%
+      rename('distance' = distance_km)
     
-    # Handling for times greater than 24 hrs, e.g., 28:30:00
-    # Start by giving all days a flag of 1 (first day)
-    data$day_flag <- 1
-    # Use regular expression to identify locations of times greater than 24 hr
-    high_times_loc <- grepl("^[2-9][4-9]:", data$departure_time)
-    # If there are times greater than 24 hrs, assign a new day flag, e.g., 2, 3, 4, n days
-    if (sum(high_times_loc) != 0){
-      high_times <- data$departure_time[high_times_loc]
-      high_times_hrs <- as.integer(substr(high_times, 1, 2))
-      day_count <- ceiling(max(high_times_hrs)) # round up to nearest day 
-      # Iterate & add day flags
-      for (days in sequence(day_count)){
-        data$day_flag[data$time_secs > (days * 24 * 60 * 60)] <- (days + 1) # change flag for days greater than days x 24 hrs
-      }
-    }
     
-    # Now that day flags/markers are in place, we can re-base the hours
-    # e.g., convert 24:30:30 to 00:30:30
-    # Use regular expression to select & modify times/hrs greater than 24
-    mod_times <- c()
-    for (time in data$departure_time[grepl("^2[4-9]:", data$departure_time)]){
-      hr <- as.integer(substr(time, 1, 2))
-      hr <- hr - 24 # Rebase to 00
-      mod_times <- append(mod_times, gsub("^2[4-9]:", paste0(sprintf("%02d", hr), ':'), time))
-    }
-    # Now apply replace old times with mod times
-    data$departure_time[grepl("^2[4-9]:", data$departure_time)] <- mod_times
-    
-    # Convert times to dummay day-time format for plot visualization
-    data <- data %>%
-      mutate(time_axis = as.POSIXct(paste0('2021-03-0', day_flag, ' ', departure_time), format = "%Y-%M-%d %H:%M:%S"))  
-    
-    # Distances are cumulatve, so get diff so we can calc a new 
-    # cumulative distance that includes dead trip & leg distances
-    data$distance <- c(0, diff(data$distance))
-    # This will produce negative values at trip edges, put this to zero
-    data$distance[data$distance < 0] <- 0
-    
-    # Get dead trip details for selected route, service & block
-    deads <- stop_analysis() %>% 
-      filter(quasi_block == input$selected_block) %>%
-      mutate(dead_trip_id = as.integer(dead_trip_id)) %>%
-      mutate(dead_trip_unique_id = as.integer(dead_trip_unique_id))
-    
-    # If dead trip data exists, get the associated shape data
-    # Arrange by point order to ensure the route is correctly defined
-    if (nrow(deads) != 0){
-      query <- paste0("SELECT * FROM dead_trip_shapes WHERE dead_trip_unique_id IN (", 
-                      paste0(sprintf("'%s'", unique(deads$dead_trip_unique_id)), collapse = ', '), ")")
-      dead_routes <- getDbData(query, conPool) %>% 
-        mutate(dead_trip_unique_id = as.integer(dead_trip_unique_id)) %>%
-        arrange(point_order)
-      
-      # Write the shape data for the dead routes to the reactive so that they 
-      # will appear on the route leaflet map
-      dead_shapes_reactive$trips <- dead_routes
-      
-      # Calculate the distance stats & join with stop analysis data for
-      # dead_start time so indices where dead route distyances can be derived 
-      dead_routes_stats <- dead_routes %>%
-        select(dead_trip_unique_id, distance_km, time_hrs) %>%
-        unique() %>%
-        left_join(deads, by = 'dead_trip_unique_id') %>%
-        select(dead_trip_unique_id, trip_first_stop_id, trip_last_stop_id, dead_start, distance_km, time_hrs, dead_time_hrs) %>%
-        # Ensure time order is correct for later insertion by index
-        mutate(dead_start_secs = toSeconds(dead_start)) %>%
-        arrange(dead_start_secs) %>%
-        select(-dead_start_secs)
-      
-      # Perform some cleaning on the stats file for presentation as
-      # verbatim print output on UI
-      dead_shapes_reactive$stats <- dead_routes_stats %>% 
-        rename(id = dead_trip_unique_id) %>%
-        rename(from_stop = trip_first_stop_id) %>%
-        rename(to_stop = trip_last_stop_id) %>%
-        rename(start = dead_start) %>%
-        rename(scheduled_time = dead_time_hrs) %>%
-        mutate(time_hrs = round(time_hrs, 2)) 
-      
-      # Now we need to add in the dead trip distances to our distance data
-      # Add 1 to indices as distance travelled is at available at the end of the trip
-      inds <- which(data$arrival_time %in% dead_routes_stats$dead_start) + 1
-      data$distance[inds] <- (dead_routes_stats$distance_km * 1000) # Convert from km to m for consistency
-      data$type[inds] <- 'dead'
-    } else {
-      dead_shapes_reactive$trips <- NULL
-      dead_shapes_reactive$stats <- NULL
-    }
-    
-    # Now get the dead leg data
-    # TODO --- Impement ability to change between service ids
-    selected_service <- unique(tripsData()$service_id[1])
-    query <- paste0("SELECT * FROM dead_leg_summary WHERE route_id = '", input$selected_route, 
-                    "' AND quasi_block =", input$selected_block, " AND service_id = '", selected_service, "'")
-    dead_legs <- getDbData(query, conPool) %>% unique()
-    
-    # Now the dead leg shape data
-    query <- paste0("SELECT * FROM dead_leg_shapes WHERE dead_trip_unique_id IN (", 
-                    paste0(sprintf("%s", unique(dead_legs$dead_leg_unique_id)), collapse = ', '), ")")
-    dead_leg_shapes <- getDbData(query, conPool) %>% arrange(dead_trip_unique_id, point_order)
-    
-    # Write the shape data to the reactive so they will be added to the geo map
-    dead_shapes_reactive$legs <- dead_leg_shapes
-    
-    # Now create dead leg stats for display as verbatim print output on UI
-    dead_shapes_reactive$leg_stats <- dead_legs %>%
-      left_join(dead_leg_shapes, by = c('dead_leg_unique_id' = 'dead_trip_unique_id')) %>%
-      mutate('id' = dead_leg_unique_id) %>%
-      select(id, start, end, route_id, quasi_block, distance_km, time_hrs) %>%
-      unique() %>%
-      mutate(distance_km = round(distance_km, 2)) %>%
-      mutate(time_hrs = round(time_hrs, 2))
-    
-    # Now we need to add the dead leg distances to our distance vector (for plotting)
-    legs_df <- dead_shapes_reactive$leg_stats
-    distance_vec <- c(0, legs_df$distance_km[legs_df$start == DEFAULT_DEPOT] * 1000, 
-                      tail(data$distance, (length(data$distance) - 1)), 
-                      legs_df$distance_km[legs_df$start != DEFAULT_DEPOT] * 1000)
-    
-    # we now have all the distance data (route, dead trips & dead legs)
-    # Get the cumulative sum of distance & convert back to km
-    distance_vec <- cumsum(distance_vec) / 1000
-    
-    # We now need a new time vector for the x-axis of our plot
-    # Bus will start at first stop time minus depot to start drive time
-    new_start <- head(data$time_axis, 1) - (legs_df$time_hrs[legs_df$start == DEFAULT_DEPOT] * 60 * 60)
-    # Bus will end at last stop time plus last stop to depot drive time
-    new_end <- tail(data$time_axis, 1) + (legs_df$time_hrs[legs_df$start != DEFAULT_DEPOT] * 60 * 60)
-    time_vec <- c(new_start, data$time_axis, new_end)
-    
-    # Create a simple data frame for plotting
-    data_plot <- data.frame(
-      distance = distance_vec,
-      time_axis = time_vec
-    )
-    
+
     # Now create the plot using Plotly
     p <- plot_ly(
       data_plot, 
@@ -607,16 +540,16 @@ shinyServer(function(input, output, session) {
       text = ~paste0(round(distance, 1), " km @ ", format(time_axis, '%H:%M'))
       )
     
-    # Add text for the total distance travelled
+    #Add text for the total distance traveled
     p <- p %>% add_text(
-      x = ~max(time_axis),
-      y = ~max(distance),
+      x = max(data_plot$time_axis),
+      y = max(data_plot$distance),
       mode = 'text',
-      text = ~paste0("<b> ", round(max(distance), 1), 'km <b>'),
+      text = paste0("<b> ", round(max(data_plot$distance), 1), 'km <b>'),
       textposition = 'right',
       textfont = list(color = '#000000', size = 13)
     )
-    
+
     # Add some final layout mods
     p <- p %>% layout(
       title = "",
@@ -626,7 +559,7 @@ shinyServer(function(input, output, session) {
       font = list(size = 11),
       xaxis = list(
         title = '',
-        range = ~c(min(time_axis), max(time_axis) + (2*60*60)),
+        range = c((min(data_plot$time_axis)- (1*60*60)), max(data_plot$time_axis) + (2*60*60)),
         type = 'date',
         tickformat = "%H:%M",
         margin = list(pad = 5)
@@ -641,21 +574,14 @@ shinyServer(function(input, output, session) {
   
   # Create reactable table view of trips for selected route
   output$tripTable <- reactable::renderReactable({
-    if(nrow(stops()) == 0){
-      data <- stops() %>% mutate(quasi_block = '')  
-    } else {
-      req(input$selected_block)
-      data <- stops() %>% filter(quasi_block == input$selected_block)  
-    }
-    
-    data <- data %>%
-      select(-route_id, -service_id, -shape_dist_traveled, -quasi_block) %>%
-      rename('direction' = direction_id)
-    
+    req(input$selected_block)
+    data <- distanceData() %>%
+      select(arrival_time, departure_time, stop_headsign, stop_name, type, direction)
+
     # Convert direction from 1/0 to In/Out
     data$direction[data$direction == '1'] <- 'In'
     data$direction[data$direction == '0'] <- 'Out'
-    
+   
     reactable(
       data,
       filterable = FALSE,
@@ -673,18 +599,33 @@ shinyServer(function(input, output, session) {
         headerStyle = list(background = "#f7f7f8")
       ),
       columns = list(
+        arrival_time = colDef(na = "\uFE4D"),
+        departure_time = colDef(na = "\uFE4D"),
+        stop_headsign = colDef(na = "\uFE4D"),
         trip_id = colDef(width = 200),
         direction = colDef(
+          na = "–",
           cell = function(value) {
             # Use arrow unicodes for in/out legs
-            if (value == 'Out') "\u2B9E" else "\u2B9C"
+            if (is.na(value)) {
+              symb = "\uFE4D" 
+            } else if (value == 'Out') {
+              symb = "\u2B9E"
+            } else {
+              symb = "\u2B9C"
+            }
+            symb
           },
           # change color between in and out for better visual differentiation
           style = function(value) {
-            if (value == 'Out') {
+            if (is.na(value)) {
+              color <- "#C1C1C1"
+            } else if (value == 'Out') {
               color <- "#1C2D38"
             } else if (value == 'In') {
               color <- "#C1C1C1"
+            } else {
+              color <- "#1C2D38"
             }
           list(fontWeight = 600, color = color)
         })

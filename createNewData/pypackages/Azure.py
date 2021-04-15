@@ -11,17 +11,25 @@ class Azure():
     def __call__(self, *args):
         if args[0] == "UploadToSQL":
             return self.UploadToSQL(args[1], args[2])
-        if args[0] == "SelectDistinct":
+        elif args[0] == "SelectDistinct":
             return self.SelectDistinct(args[1], args[2])
-        if args[0] == "SelectLongLat":
+        elif args[0] == "SelectLongLat":
             return self.SelectLongLat(args[1],args[2],args[3],args[4])
-        if args[0] == "UploadToMongo":
+        elif args[0] == "UploadToMongo":
             return self.UploadToMongo(args[1],args[2])
-        if args[0] == "SelectFromMongo":
+        elif args[0] == "SelectFromMongo":
             return self.SelectFromMongo()
+        elif args[0] == "AzureDBConn":
+            return self.AzureDBConn(args[1])
+        elif args[0] == "CreateMongoColl":
+            return self.CreateMongoColl(args[1])
+        elif args[0] == "dropMongoColl":
+            return self.dropMongoColl(args[1])
+        else:
+            return "Object does not exist."
 
-    def AzureDBConn(self):
-        conn = pyodbc.connect(self.in_config.connQuote)
+    def AzureDBConn(self, connStr):
+        conn = pyodbc.connect(connStr)
         return conn
 
     def AzureDBEng(self):
@@ -31,7 +39,6 @@ class Azure():
     
     def AzureMongoConn(self):
         uri = self.in_config.MongoQuote
-        print(uri)
         client = pymongo.MongoClient(uri)
         return client
 
@@ -41,11 +48,17 @@ class Azure():
 
     def UploadToMongo(self, collection, MongoData):
         client = self.AzureMongoConn()
-        mydb = client[collection]
+        mydb = client[self.in_config.MongoDB]
         mycol = mydb[collection]
         mydict = MongoData
         mycol.insert_one(mydict)
         client.close()
+    
+    def dropMongoColl(self, collection):
+        client = self.AzureMongoConn()
+        mydb = client[self.in_config.MongoDB]
+        mycol = mydb[collection]
+        mycol.drop()
 
     def SelectFromMongo(self):
         client = self.AzureMongoConn()
@@ -54,10 +67,16 @@ class Azure():
         client.close()
         return collection
     
+    def CreateMongoColl(self, newDB):
+        client = self.AzureMongoConn()
+        mydb = client[self.in_config.MongoDB]
+        mycol = mydb[newDB]
+        client.close()
+    
     def SelectDistinct(self, column, tablename):
         """ Collect all the distinct shape ID's and loop through each
             returning the elevation data from the portal."""
-        conn = self.AzureDBConn()
+        conn = self.AzureDBConn(self.in_config.connQuote)
         SQLString = self.in_config.SQLDistinct.format(column, tablename)
         df = pd.read_sql(SQLString, conn)
         conn.close()

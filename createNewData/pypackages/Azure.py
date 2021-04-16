@@ -10,7 +10,7 @@ class Azure():
         self.in_config = in_config
     def __call__(self, *args):
         if args[0] == "UploadToSQL":
-            return self.UploadToSQL(args[1], args[2])
+            return self.UploadToSQL(args[1], args[2], args[3])
         elif args[0] == "SelectDistinct":
             return self.SelectDistinct(args[1], args[2])
         elif args[0] == "SelectLongLat":
@@ -29,24 +29,37 @@ class Azure():
             return "Object does not exist."
 
     def AzureDBConn(self, connStr):
+        """Connect to SQL database simple.
+           Requires connection string."""
         conn = pyodbc.connect(connStr)
         return conn
 
-    def AzureDBEng(self):
+    def AzureDBEng(self, conn):
+        """Connect to SQL database for pandas to_sql command.
+           Requires connection string.
+           **Not Callable outside of method**"""
         connStr = 'mssql+pyodbc:///?odbc_connect={}'
-        Eng = connStr.format(urllib.parse.quote_plus(self.in_config.connQuote))
+        Eng = connStr.format(urllib.parse.quote_plus(conn))
         return Eng 
     
     def AzureMongoConn(self):
+        """Connect to MongoDB.
+           **Not Callable outside of method**"""
         uri = self.in_config.MongoQuote
         client = pymongo.MongoClient(uri)
         return client
 
-    def UploadToSQL(self, df, tablename):
-        conn = self.AzureDBEng()
+    def UploadToSQL(self, df, tablename, conn):
+        """Upload data dataframe to SQL.
+           Requires: Dataframe, new table name 
+           and SQL connection"""
+        conn = self.AzureDBEng(conn)
         df.to_sql(tablename, conn, if_exists='replace')
 
     def UploadToMongo(self, collection, MongoData):
+        """Upload files to MongoDB.
+           Requires collection name and Json 
+           file to upload to MongoDB"""
         client = self.AzureMongoConn()
         mydb = client[self.in_config.MongoDB]
         mycol = mydb[collection]
@@ -54,13 +67,17 @@ class Azure():
         mycol.insert_one(mydict)
         client.close()
     
-    def dropMongoColl(self, collection):
+    def DropMongoColl(self, collection):
+        """Drop MongoDB collection by collection name.
+           Requires collection name."""
         client = self.AzureMongoConn()
         mydb = client[self.in_config.MongoDB]
         mycol = mydb[collection]
         mycol.drop()
 
     def SelectFromMongo(self):
+        """Return all docuements in the MongoDB'shapes' 
+           collection"""
         client = self.AzureMongoConn()
         db = client.shapes
         collection = db.shapes
@@ -68,14 +85,17 @@ class Azure():
         return collection
     
     def CreateMongoColl(self, newDB):
+        """Create empty MongoDB collection.
+           requires collection name."""
         client = self.AzureMongoConn()
         mydb = client[self.in_config.MongoDB]
         mycol = mydb[newDB]
         client.close()
     
     def SelectDistinct(self, column, tablename):
-        """ Collect all the distinct shape ID's and loop through each
-            returning the elevation data from the portal."""
+        """Collect all the distinct shape ID's and loop through each
+           returning the elevation data from the portal.
+           Requires column and table name"""
         conn = self.AzureDBConn(self.in_config.connQuote)
         SQLString = self.in_config.SQLDistinct.format(column, tablename)
         df = pd.read_sql(SQLString, conn)
@@ -83,9 +103,10 @@ class Azure():
         return df
     
     def SelectLongLat(self, columns, tablename, columnName, shape):
-        """ Collect all the data in a table that contains the shape name in 
-            the shape_id column."""
-        conn = self.AzureDBConn()
+        """Collect all the data in a table that 
+           contains the shape name in 
+           the shape_id column."""
+        conn = self.AzureDBConn(self.in_config.connQuote)
         SQLString = self.in_config.SQLStr.format(columns, 
                                                  tablename, 
                                                  columnName, 

@@ -44,6 +44,12 @@ teamConnQuote = f'''DRIVER={SQLDRIVERTEAM};
 
 MongoQuote = f'''mongodb://{MongoUser}:{MongoPass}==@{MongoLocation}/?ssl=true&retrywrites=false&replicaSet=globaldb&maxIdleTimeMS=120000&appName=@{MongoUser}@'''
 
+#---------------------------------------
+# SQL misc. vaiables
+#---------------------------------------
+
+MongoDB = "shapes"
+
 
 #---------------------------------------
 # Local Folder Locations
@@ -52,13 +58,15 @@ shapes = r"C:\Users\James\Documents\MSc in Data Analytics\Database and Ananytics
 
 
 #---------------------------------------
-# Columns required for returning the distinct shape db values
+# Columns required for returning the 
+# distinct shape db values
 #---------------------------------------
 longLatCol = ['shape_id','shape_pt_lat','shape_pt_lon']
 
 
 #---------------------------------------
-# Standard SQL strings for use in the Azure Module
+# Standard SQL strings for use in the 
+# Azure Module
 #---------------------------------------
 SQLDistinct = "SELECT DISTINCT {0} FROM {1}"
 
@@ -77,6 +85,12 @@ SQLElevation = """SELECT
                     [dbo].[shapes].shape_pt_lon = [dbo].[elevations].longitude
                """
 
+SQLCreateElevation = """CREATE TABLE elevations (
+                        PersonID int,
+                        LastName varchar(255),
+                        FirstName varchar(255),
+                        PRIMARY KEY (ID)
+                         );"""
 
 #---------------------------------------
 # Custom Exception Messages
@@ -85,7 +99,11 @@ URLOOD = "Please ensure that the URL in the config file is not out of date."
 NDIDF = "No data present in the current dataframe."
 TEC = "Type error in cosmos connection string, please check your environment variables"
 FIDB = "File already exists for this key in the database."
-UNKMGO = "An unknown exception occured while attempting to upload to mongodb."
+UNKMGO = "An unknown exception occured while attempting to complete this function."
+
+#---------------------------------------
+# API call header data
+#---------------------------------------
 
 
 elevHeaders = {'Accept':'application/json',
@@ -93,4 +111,3 @@ elevHeaders = {'Accept':'application/json',
                }
 RTIheaders = {"x-api-key" : 'd211bcc7f9164b4e81ecda066c1ec7c1'}
 
-MongoDB = "shapes"

@@ -170,7 +170,13 @@ shinyServer(function(input, output, session) {
       # Add to reactive to display as verbatim output
       dead_shapes_reactive$stats <- deads %>%
         left_join(dead_routes_unique, by = 'dead_trip_unique_id') %>%
-        select(trip_first_stop_id, trip_last_stop_id, dead_start, dead_end, dead_time_hrs, time_hrs, distance_km)
+        select(trip_first_stop_id, trip_last_stop_id, dead_start, dead_end, dead_time_hrs, time_hrs, distance_km) %>%
+        rename('from_stop' = trip_first_stop_id) %>%
+        rename('to_stop' = trip_last_stop_id) %>%
+        rename('start' = dead_start) %>%
+        rename('end' = dead_end) %>%
+        rename('schedule_hrs' = dead_time_hrs) %>%
+        rename('travel_hrs' = time_hrs)
     } else {
       dead_shapes_reactive$stats <- NULL
       dead_routes <- NULL
@@ -485,8 +491,8 @@ shinyServer(function(input, output, session) {
   output$showDeadTripInfo <- renderUI({
     div(
       div('Dead Trips & Legs', class = 'title-header'),
-      div(verbatimTextOutput('deadLegTable'), style = 'margin: 20px; margin-left: 40px; margin-right: 72px;'),
-      div(verbatimTextOutput('deadTripTable'), style = 'margin: 20px; margin-left: 40px; margin-right: 72px;')
+      div(verbatimTextOutput('deadLegTable'), style = 'margin: 20px; margin-left: 40px; margin-right: 60px;'),
+      div(verbatimTextOutput('deadTripTable'), style = 'margin: 20px; margin-left: 40px; margin-right: 60px;')
     )
   })
   

@@ -1,3 +1,4 @@
+# Load common functions
 source('common/db.R')
 
 library(rjson)
@@ -8,26 +9,37 @@ DATABASE <- "electricbus-eastus-prod"
 DEFAULT_SERVER <- "electricbus.database.windows.net"
 PORT <- 1433
 USERNAME <- "teamadmin"
+# Database password is in local json configs file
 
+# Create database connection pool
 conPool <- getDbPool(DATABASE)
 
+# Function for converting time in string H:M:S format to numeric seconds
 toSeconds <- function(x){
   if (!is.character(x)) stop("x must be a character string of the form H:M:S")
-  if (length(x)<=0)return(x)
+  if (length(x) <= 0) return(x)
   
-  unlist(
-    lapply(x,
-      function(i){
-        i <- as.numeric(strsplit(i, ':', fixed = TRUE)[[1]])
-        if (length(i) == 3) 
-          i[1] * 3600 + i[2] * 60 + i[3]
-        else if (length(i) == 2) 
-          i[1] * 60 + i[2]
-        else if (length(i) == 1) 
-          i[1]
-        }  
-    )  
-  )  
+  # converts to num vec, i.e., 20 10 10, and check length 
+  vec <- as.numeric(strsplit(x, ':', fixed = TRUE)[[1]]) 
+  if (length(vec) == 3) {
+    hrs = vec[1] 
+    min = vec[2]
+    sec = vec[3]
+    if (min > 59 | sec > 59) stop("Mins & secs must be less than 60")
+    secs <- (hrs * 3600 + min * 60 + sec)
+    return(secs)
+  } else if (length(vec) == 2) { # mins & secs 
+    min = vec[2]
+    sec = vec[3]
+    if (min > 59 | sec > 59) stop("Mins & secs must be less than 60")
+    secs <- (min * 60 + sec)
+    return(secs)
+  } else if (length(vec) == 1) {
+    sec = vec[1]
+    if (sec > 59) stop("secs must be less than 60")
+    secs <- sec
+    return(secs)
+  } # secs only
 } 
 
 # Get bus depot coordinates

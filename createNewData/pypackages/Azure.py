@@ -96,7 +96,7 @@ class Azure():
         """Collect all the distinct shape ID's and loop through each
            returning the elevation data from the portal.
            Requires column and table name"""
-        conn = self.AzureDBConn(self.in_config.connQuote)
+        conn = self.AzureDBConn(self.in_config.teamConnQuote)
         SQLString = self.in_config.SQLDistinct.format(column, tablename)
         df = pd.read_sql(SQLString, conn)
         conn.close()

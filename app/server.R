@@ -482,7 +482,10 @@ shinyServer(function(input, output, session) {
   
   # UI render for the distance plot
   output$showRoutePlots <- renderUI({
-    div(plotlyOutput('distancePlot', height = 200), style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;')
+    div(
+      div(plotlyOutput('distancePlot', height = 200), style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;'),
+      div(plotlyOutput('elevationPlot', height = 200), style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;')
+    )
   })
   
   # UI render for the dead trip & leg summary info
@@ -570,6 +573,59 @@ shinyServer(function(input, output, session) {
         tickformat = "%H:%M",
         margin = list(pad = 5)
         )
+    )
+  })
+  
+  output$elevationPlot <- renderPlotly({
+    req(input$selected_block)
+    
+    data_plot <- distanceData() %>%
+      # time was saved as BST hence adjusted to UTC
+      # Add the hour back now, BST is 1 hr ahead of UTC
+      # TODO --- regenerate db data with times as UTC and not BST
+      mutate(time_axis = time_axis + (1*60*60)) %>%
+      arrange(time_axis) %>%
+      rename('distance' = distance_km)
+    
+    
+    # Now create the plot using Plotly
+    p <- plot_ly(
+      data_plot, 
+      x = ~time_axis, 
+      y = ~distance, 
+      type = 'scatter', 
+      mode = 'lines',
+      height = 230, 
+      name = 'Distance',
+      line = list(color = '#1C2D38'),
+      hoverinfo = 'text', 
+      text = ~paste0(round(distance, 1), " km @ ", format(time_axis, '%H:%M'))
+    )
+    
+    #Add text for the total distance traveled
+    p <- p %>% add_text(
+      x = max(data_plot$time_axis),
+      y = max(data_plot$distance),
+      mode = 'text',
+      text = paste0("<b> ", round(max(data_plot$distance), 1), 'km <b>'),
+      textposition = 'right',
+      textfont = list(color = '#000000', size = 13)
+    )
+    
+    # Add some final layout mods
+    p <- p %>% layout(
+      title = "",
+      yaxis = list(title = list(text = '<b>Distance (km)</b>',  standoff = 20L),
+                   rangemode = "nonnegative"),
+      showlegend = FALSE,
+      font = list(size = 11),
+      xaxis = list(
+        title = '',
+        range = c((min(data_plot$time_axis)- (1*60*60)), max(data_plot$time_axis) + (2*60*60)),
+        type = 'date',
+        tickformat = "%H:%M",
+        margin = list(pad = 5)
+      )
     )
   })
   

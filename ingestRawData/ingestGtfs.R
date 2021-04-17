@@ -1,20 +1,186 @@
 library(rvest)
 library(stringr)
+library(xml2)
 library(dplyr)
 
+# Define webpage for Dublin Bus GTFS data 
 page <- xml2::read_html("https://transitfeeds.com/p/transport-for-ireland/782")
 
+# Get the url for the zip file
 file <- page %>%
-  html_nodes("a") %>%     # find all links
-  html_attr("href") %>%   # get the url
-  str_subset("\\.zip")    # find those that end in zip
+  rvest::html_nodes("a") %>%     # find all links
+  rvest::html_attr("href") %>%   # get the url
+  stringr::str_subset("\\.zip")    # find those that end in zip
 
-
+# Download the data as a zip file
 download.file(
   url = file, 
   destfile = 'C:/MyApps/dapTbElectricDublinBus/ingestRawData/gtfs.zip'
 )
 
+# Unzip the data to a raw folder
+# This will create a series of txt files for each GTFS 'table'
 unzip(
   'C:/MyApps/dapTbElectricDublinBus/ingestRawData/gtfs.zip',
   exdir = 'ingestRawData/raw')
+
+
+# GTFS File Descriptions
+# ======================
+# Ref.:
+# https://developers.google.com/transit/gtfs/reference
+
+# agency.txt 
+# Transit agencies with service represented in this dataset.
+ 
+# stops.txt
+# Stops where vehicles pick up or drop off riders. Also defines stations and station entrances.
+ 
+# routes.txt	
+# A route is a group of trips that are displayed to riders as a single service.
+ 
+# trips.txt	
+# Trips for each route. 
+# A trip is a sequence of two or more stops that occur during a specific time period.
+ 
+# stop_times.txt
+# Times that a vehicle arrives at and departs from stops for each trip.
+ 
+# calendar.txt	
+# Service dates specified using a weekly schedule with start and end dates. 
+# This file is required unless all dates of service are defined in calendar_dates.txt.
+ 
+# calendar_dates.txt	
+# Exceptions for the services defined in the calendar.txt.
+# If calendar.txt is omitted, then calendar_dates.txt is required and must contain all dates of service.
+
+# Notes on specific fields from GTFS specification
+# ================================================
+
+# direction_id
+# Indicates the direction of travel for a trip. This field is not used in routing; 
+# it provides a way to separate trips by direction when publishing time tables. Valid options are:
+# 0 - Travel in one direction (e.g. outbound travel).
+# 1 - Travel in the opposite direction (e.g. inbound travel).
+
+# block_id ~ Not provided in Diblin Bus data?
+# Identifies the block to which the trip belongs. 
+# A block consists of a single trip or many sequential trips made using the same vehicle, 
+# defined by shared service days and block_id. A block_id can have trips with different service days, 
+# making distinct blocks. See the example below
+
+# Create an emtpy list to hold the GTFS data
+data <- list()
+
+# Get a vector of file names that have been unzipped
+files <- list.files('ingestRawData/raw/')
+
+# Avoid readtable cutting back precision
+options(digits = 22)
+
+# Loop through and add each file as an element to the list
+for (file in 1:length(files)){
+  file <- files[file]
+  table_name <- gsub('.txt', '', file)
+  data_add <- read.table(paste0('ingestRawData/raw/', file), sep = ',', header = TRUE)
+  names(data_add) <- gsub('ï..', '', names(data_add)) # Clean any strange chars that import with field name
+  data[[table_name]] <- data_add
+  rm(data_add, table_name, file)
+}
+
+trip_selected <- data$trips %>%
+  filter(route_id == '60-116-d12-1')
+
+library(pool)
+library(DBI)
+library(rjson)
+
+# The app's database (SQL azure)
+DATABASE <- "electricbus-eastus-prod"
+
+"%+%" <- function(...) paste0(...)
+
+DEFAULT_SERVER <- "electricbus.database.windows.net"
+PORT <- 1433
+USERNAME <- "teamadmin"
+
+DB_PASSWORD_FILE_NAME <- "password.json"
+
+# read config from local config file 
+passwordDb_config <- fromJSON(file = DB_PASSWORD_FILE_NAME) # SQL database connection on Azure
+
+runningOnShinyApps <- function() {
+  if (Sys.getenv('SHINY_PORT') == "") { 
+    return(FALSE)  # NOT running on shinyapps.io
+  } else {
+    return(TRUE)  # Running on shinyapps.io
+  }
+}
+
+# create function to get local odbc driver from machine
+getLocalDriverODBC <- function() {
+  # in instances where there are >1 drivers, only take most recent, defined by a decresing sort function
+  return(sort(unique(odbc::odbcListDrivers()$name[grep('ODBC', odbc::odbcListDrivers()$name, ignore.case = F, perl = T)]), decreasing=T)[1])
+} 
+
+# connect to the database, use a different server string formatting depending on windows (local) or linux (shinyapps)
+getServerStr <- function(server) {
+  if (runningOnShinyApps()) {
+    return(server %+% ";Port=" %+% as.character(PORT))
+  } else  { # local
+    return("tcp:" %+% server %+% "," %+% as.character(PORT))
+  }
+}
+
+# connect to the database, use a different driver if the application is on shinyapps.io
+getDriverStr <- function() {
+  if (runningOnShinyApps()) {
+    return("FreeTDS;TDS_Version=7.2") 
+  } else { # local
+    return(getLocalDriverODBC())  # take ODBC driver name from machine, rather than hard coding it in as it can change dependign on version of MS SQL Server Mgmt Studio
+  }
+} 
+
+formConnectionString <- function(database, server, username, password) {
+  connectionString <- "Driver="   %+% getDriverStr() %+%  ";" %+%
+    "Server="   %+% getServerStr(server) %+%  ";" %+%
+    "Database=" %+% database   %+%  ";" %+%
+    "Uid="      %+% username   %+%  ";" %+%
+    "Pwd={"     %+% password   %+% "};" %+% # password stored in non-source-controlled file
+    "Encrypt=yes;" %+%
+    "TrustServerCertificate=no;" %+%
+    "Connection Timeout=30;"
+  return(connectionString)
+}
+
+# Get database pool.
+getDbPool <- function(dbName = NA, serverName = NA) {
+  if (is.na(dbName)) {
+    stop("you must specify a database name")
+  }
+  if (is.na(serverName)) {
+    serverName <- DEFAULT_SERVER
+  }
+  return(pool::dbPool(odbc::odbc(), .connection_string = formConnectionString(dbName, serverName, USERNAME, passwordDb_config$password)))
+}
+
+conPool <- getDbPool(DATABASE)
+con <- poolCheckout(conPool)
+
+for (i in 1:length(names(data))){
+  table_name <- names(data)[i]
+  dat <- data[[names(data)[i]]]
+  print(table_name)
+  print(head(dat))
+  if (table_name == 'routes') {
+    # Seems to be an issue creating a table with the name 'routes'
+    DBI::dbWriteTable(con, name = 'bus_routes', value = dat, overwrite = TRUE)    
+  } else {
+    DBI::dbWriteTable(con, name = table_name, value = dat, overwrite = TRUE)    
+  }
+}
+
+# Get the latest count
+query <- "SELECT * FROM routes"
+pull_data <- DBI::dbGetQuery(con, query)
+poolReturn(con)

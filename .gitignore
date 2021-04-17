@@ -75,6 +75,7 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 
+<<<<<<< HEAD
 # IPython
 profile_default/
 ipython_config.py
@@ -129,3 +130,13 @@ appsettings.json
 local.settings.json
 .python_packages
 .Rproj.user
+=======
+# Ignore rsconnect for now
+rsconnect
+# Other
+README.html
+
+# Local passwords & keys
+password.json
+keys.json
+>>>>>>> integration

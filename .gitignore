@@ -139,4 +139,10 @@ README.html
 # Local passwords & keys
 password.json
 keys.json
+<<<<<<< HEAD
+>>>>>>> integration
+=======
+
+# Py chace
+common/__pycache__
 >>>>>>> integration

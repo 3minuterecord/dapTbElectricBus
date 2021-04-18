@@ -1,32 +1,12 @@
-library(shiny)
-library(shinydashboard)
-library(shinyWidgets) # for toggle switch
-library(shinyalert)
-library(shinyjs)
-library(pool)
-library(reactable)
-library(stringr)
-library(plotly)
-library(leaflet)
-library(leaflet.extras)
-library(leafpm)
 library(DBI)
-library(rjson)
-library(viridis)
-
-# The app's database (SQL azure)
-DATABASE <- "electricbus-eastus-prod"
+library(pool)
 
 "%+%" <- function(...) paste0(...)
-
-DEFAULT_SERVER <- "electricbus.database.windows.net"
-PORT <- 1433
-USERNAME <- "teamadmin"
 
 DB_PASSWORD_FILE_NAME <- "password.json"
 
 # read config from local config file 
-passwordDb_config <- fromJSON(file = DB_PASSWORD_FILE_NAME) # SQL database connection on Azure
+passwordDb_config <- fromJSON(file = DB_PASSWORD_FILE_NAME) # SQL database connection on
 
 runningOnShinyApps <- function() {
   if (Sys.getenv('SHINY_PORT') == "") { 
@@ -90,52 +70,40 @@ getDbData <- function (query, connection_pool){
   return(data)
 }
 
-toSeconds <- function(x){
-  if (!is.character(x)) stop("x must be a character string of the form H:M:S")
-  if (length(x)<=0)return(x)
-  
-  unlist(
-    lapply(x,
-           function(i){
-             i <- as.numeric(strsplit(i, ':', fixed = TRUE)[[1]])
-             if (length(i) == 3) 
-               i[1] * 3600 + i[2] * 60 + i[3]
-             else if (length(i) == 2) 
-               i[1] * 60 + i[2]
-             else if (length(i) == 1) 
-               i[1]
-           }  
-    )  
-  )  
-} 
+saveByChunk <- function(chunk_size, dat, table_name, connection_pool, replace = TRUE) {
+  con <- pool::poolCheckout(connection_pool)
+  # Save data in chunks so that progress can be tracked
+  # Split the data frame into chunks of chunk size or less
+  chunkList <- split(dat, (seq(nrow(dat)) - 1) %/% chunk_size)
+  # Now write each data chunk to the database 
+  for (i in 1:length(chunkList)){
+    print(paste0("Processing Batch ", i, " of ", length(chunkList)))
+    if (i == 1 & replace == TRUE){
+      print('Creating & writing to database table...')
+      write <- DBI::dbWriteTable(con, name = table_name, value = chunkList[[i]], overwrite = TRUE, row.names = FALSE)  
+      if(write){
+        print('Successful data write...')
+      } else {
+        print('Unsuccessful data write...')
+      }
+    } else {
+      print('Appending data to database table...')
+      write <- DBI::dbWriteTable(con, name = table_name, value = chunkList[[i]], append = TRUE, row.names = FALSE) 
+      if(write){
+        print('Successful data write...')
+      } else {
+        print('Unsuccessful data write...')
+      }
+    }
+  }
+  poolReturn(con)
+}
 
-# Add 24hrs to all transitions so that we can cehck for the scenario where a consecutive 
-# stops on a trip straddle midnight
-#stops$mod_time <- toSeconds(stops$departure_time) + (stops$quasi_block * 24 * 60 * 60)
-#stops$diff_mod <- c(0, diff(stops$mod_time))
-
-# # How many of these cases are less than a reasonable gap
-# # i.e., if there is greater than a couple of hrs there it is not practical to assume 
-# # it is part of the same block
-# checks <- sum(stops$diff_mod < REASONABLE_GAP & stops$quasi_block == 1)
-# if (checks >= 1){
-#   # Get the index of cases where there is a short gap
-#   index <- which(stops$diff_mod < REASONABLE_GAP & stops$quasi_block == 1)
-#   # Reset the block markers to zero
-#   stops$quasi_block[index] <- 0
-#   # For each index, check the next time to see if it is reasonable to 
-#   # say it is connected to the block or part of a new block
-#   for (i in 1:checks){
-#     j = 1
-#     repeat{
-#       chk_i <- stops$diff_time[index[i] + j]
-#       if (chk_i < REASONABLE_GAP){
-#         j = j + 1 # It is assumed to be part of the block, check the next...
-#       } else {
-#         # When there is an unreasonable gap, mark the block transition & break...
-#         stops$quasi_block[index[i] + j] <- 1
-#         break
-#       } 
-#     }  
-#   }
-# }
+getStopName <- function(stop_id, connection_pool){
+  con <- poolCheckout(connection_pool)
+  query <- paste0("SELECT stop_name from stops WHERE stop_id = '", stop_id, "'")
+  stop_name <- DBI::dbGetQuery(con, query)$stop_name[1]
+  pool::poolReturn(con)
+  rm(query)
+  return(stop_name)
+}

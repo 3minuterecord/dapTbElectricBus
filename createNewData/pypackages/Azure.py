@@ -6,6 +6,7 @@ import pymongo
 
 
 class Azure():
+    """Connect to Azure for multiple servers"""
     def __init__(self,in_config):
         self.in_config = in_config
     def __call__(self, *args):
@@ -25,26 +26,28 @@ class Azure():
             return self.CreateMongoColl(args[1])
         elif args[0] == "dropMongoColl":
             return self.dropMongoColl(args[1])
+        elif args[0] == "SelectAllData":
+            return self.SelectAllData(args[1])
         else:
             return "Object does not exist."
 
     def AzureDBConn(self, connStr):
         """Connect to SQL database simple.
-           Requires connection string."""
+           Requires: connection string."""
         conn = pyodbc.connect(connStr)
         return conn
 
     def AzureDBEng(self, conn):
         """Connect to SQL database for pandas to_sql command.
-           Requires connection string.
-           **Not Callable outside of method**"""
+           Requires: connection string.
+           **Not Callable outside of Azure()**"""
         connStr = 'mssql+pyodbc:///?odbc_connect={}'
         Eng = connStr.format(urllib.parse.quote_plus(conn))
         return Eng 
     
     def AzureMongoConn(self):
         """Connect to MongoDB.
-           **Not Callable outside of method**"""
+           **Not Callable outside of Azure()**"""
         uri = self.in_config.MongoQuote
         client = pymongo.MongoClient(uri)
         return client
@@ -58,7 +61,7 @@ class Azure():
 
     def UploadToMongo(self, collection, MongoData):
         """Upload files to MongoDB.
-           Requires collection name and Json 
+           Requires: collection name and Json 
            file to upload to MongoDB"""
         client = self.AzureMongoConn()
         mydb = client[self.in_config.MongoDB]
@@ -69,7 +72,7 @@ class Azure():
     
     def DropMongoColl(self, collection):
         """Drop MongoDB collection by collection name.
-           Requires collection name."""
+           Requires: collection name."""
         client = self.AzureMongoConn()
         mydb = client[self.in_config.MongoDB]
         mycol = mydb[collection]
@@ -86,7 +89,7 @@ class Azure():
     
     def CreateMongoColl(self, newDB):
         """Create empty MongoDB collection.
-           requires collection name."""
+           requires: collection name."""
         client = self.AzureMongoConn()
         mydb = client[self.in_config.MongoDB]
         mycol = mydb[newDB]
@@ -95,9 +98,19 @@ class Azure():
     def SelectDistinct(self, column, tablename):
         """Collect all the distinct shape ID's and loop through each
            returning the elevation data from the portal.
-           Requires column and table name"""
+           Requires: column and table name"""
         conn = self.AzureDBConn(self.in_config.teamConnQuote)
         SQLString = self.in_config.SQLDistinct.format(column, tablename)
+        df = pd.read_sql(SQLString, conn)
+        conn.close()
+        return df
+    
+    def SelectAllData(self, tablename):
+        """Collect all the distinct shape ID's and loop through each
+           returning the elevation data from the portal.
+           Requires: column and table name"""
+        conn = self.AzureDBConn(self.in_config.teamConnQuote)
+        SQLString = self.in_config.SQLSelect.format(tablename)
         df = pd.read_sql(SQLString, conn)
         conn.close()
         return df

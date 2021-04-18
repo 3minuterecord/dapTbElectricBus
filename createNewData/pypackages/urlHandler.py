@@ -15,6 +15,8 @@ class UrlHandler():
             return self.mineElevationData(args[1])
         elif args[0] == "callURL":
             return self.callURL(args[1], args[2], args[3])
+        elif args[0] == "generateLocationRequest":
+            return self.generateLocationRequest(args[1])
         else:
             return "Object does not exist."
 
@@ -38,8 +40,8 @@ class UrlHandler():
         return locationDict
 
     def mineElevationData(self, shapeData):
-        data = self.generateLocationRequest(shapeData)
-        body = str.encode(json.dumps(data))
+        # data = self.generateLocationRequest(shapeData)
+        body = str.encode(json.dumps(shapeData))
         response = self.callURL(in_config.url, body, in_config.elevHeaders)
         jsonReadyData = response.read().decode('utf8').replace("'", '"')
         elevationData = json.loads(jsonReadyData)

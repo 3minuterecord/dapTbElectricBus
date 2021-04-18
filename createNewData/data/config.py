@@ -74,6 +74,8 @@ SQLStr = """SELECT {0}
              FROM {1}
              WHERE {2} = '{3}'"""
 
+SQLSelect = SQLStr = """SELECT * FROM {0}"""
+
 SQLElevation = """SELECT
                     [dbo].[shapes].shape_id,[dbo].[shapes].shape_pt_lat,[dbo].[shapes].shape_pt_lon,[dbo].[shapes].shape_pt_sequence,
                     [dbo].[elevations].elevation
@@ -99,7 +101,11 @@ URLOOD = "Please ensure that the URL in the config file is not out of date."
 NDIDF = "No data present in the current dataframe."
 TEC = "Type error in cosmos connection string, please check your environment variables"
 FIDB = "File already exists for this key in the database."
-UNKMGO = "An unknown exception occured while attempting to complete this function."
+UNKMGO = "An unexpected exception occured while attempting to complete this function."
+FailedImport = "Failed to import critical modules for this script.\nPlease confirm that files exist in the correct locations."
+RequestToBig = "Request is too large for API, please review code in order to reduce request size"
+NoSQLShema = "Something went wrong while attempting to collect the 'shapes' schema from the team SQL database. Please ensure that the 'shapes' schema exists in the database and all related column names are correct."
+SQLConnectionFail = "Failed to connect to SQL database, please ensure that connection details and user credentials are correct."
 
 #---------------------------------------
 # API call header data
@@ -109,5 +115,5 @@ UNKMGO = "An unknown exception occured while attempting to complete this functio
 elevHeaders = {'Accept':'application/json',
                'Content-Type':'application/json'
                }
-RTIheaders = {"x-api-key" : 'd211bcc7f9164b4e81ecda066c1ec7c1'}
+RTIheaders = {"x-api-key" : os.environ.get("RTIAPIKEY")}
 

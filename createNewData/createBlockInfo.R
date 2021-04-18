@@ -406,7 +406,12 @@ repeat{
 
         # Convert times to dummay day-time format for plot visualization
         data <- data %>%
-          mutate(time_axis = as.POSIXct(paste0('2021-03-0', day_flag, ' ', departure_time), format = "%Y-%M-%d %H:%M:%S"))
+          mutate(
+            time_axis = as.POSIXct(
+              paste0('2021-01-0', day_flag, ' ', departure_time), 
+              format = "%Y-%m-%d %H:%M:%S", tz = 'UTC'
+              ) 
+            )
 
         # Distances are cumulative, so get diff so we can calc a new
         # cumulative distance that includes dead trip & leg distances

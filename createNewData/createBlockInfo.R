@@ -17,29 +17,21 @@ conPool <- getDbPool(DATABASE)
 # Function for converting time in string H:M:S format to numeric seconds
 toSeconds <- function(x){
   if (!is.character(x)) stop("x must be a character string of the form H:M:S")
-  if (length(x) <= 0) return(x)
+  if (length(x)<=0)return(x)
   
-  # converts to num vec, i.e., 20 10 10, and check length 
-  vec <- as.numeric(strsplit(x, ':', fixed = TRUE)[[1]]) 
-  if (length(vec) == 3) {
-    hrs = vec[1] 
-    min = vec[2]
-    sec = vec[3]
-    if (min > 59 | sec > 59) stop("Mins & secs must be less than 60")
-    secs <- (hrs * 3600 + min * 60 + sec)
-    return(secs)
-  } else if (length(vec) == 2) { # mins & secs 
-    min = vec[2]
-    sec = vec[3]
-    if (min > 59 | sec > 59) stop("Mins & secs must be less than 60")
-    secs <- (min * 60 + sec)
-    return(secs)
-  } else if (length(vec) == 1) {
-    sec = vec[1]
-    if (sec > 59) stop("secs must be less than 60")
-    secs <- sec  # secs only
-    return(secs)
-  } 
+  unlist(
+    lapply(x,
+           function(i){
+             i <- as.numeric(strsplit(i, ':', fixed = TRUE)[[1]])
+             if (length(i) == 3) 
+               i[1] * 3600 + i[2] * 60 + i[3]
+             else if (length(i) == 2) 
+               i[1] * 60 + i[2]
+             else if (length(i) == 1) 
+               i[1]
+           }  
+    )  
+  )  
 } 
 
 # Get bus depot coordinates
@@ -313,7 +305,7 @@ for (row in sequence(nrow(dead_legs_out_unique))){
 # ==========================================
 # Create main block summary table with distances for visualization in
 # the Shiny app.  This data will also be used for the main Distance vs Time plot
-# This wranlging could be done in the backend of the application but for the 
+# This wrangling could be done in the back-end of the application but for the 
 # this project, in order to reduce the complexity of in-app wrangling, it 
 # is done here and output is saved to the Azure SQL db linked ot the app
 
@@ -331,6 +323,7 @@ repeat{
   print(paste0('Processing slice ', slice[1], ' to ', slice[2]))
   routesVectorSlice <- routesVector[slice[1]:slice[2]]
   data_plot <- data.frame()
+  data_summary <- data.frame()
   for (route in routesVectorSlice){
     print(paste0('Route ', which(routesVector %in% route), ' of ', length(routesVector)))
     # Trips
@@ -404,7 +397,7 @@ repeat{
         # Now apply replace old times with mod times
         data$departure_time[grepl("^2[4-9]:", data$departure_time)] <- mod_times
 
-        # Convert times to dummay day-time format for plot visualization
+        # Convert times to dummy day-time format for plot visualization
         data <- data %>%
           mutate(
             time_axis = as.POSIXct(
@@ -439,7 +432,7 @@ repeat{
           dead_routes <- getDbData(query, conPool) %>% mutate(dead_trip_unique_id = as.integer(dead_trip_unique_id))
 
           # Calculate the distance stats & join with stop analysis data for
-          # dead_start time so indices where dead route distyances can be derived
+          # dead_start time so indices where dead route distances can be derived
           dead_routes_stats <- dead_routes %>%
             select(dead_trip_unique_id, distance_km, time_hrs) %>%
             unique() %>%
@@ -507,9 +500,28 @@ repeat{
           stop = c(DEFAULT_DEPOT, data$stop_id, DEFAULT_DEPOT),
           stop_headsign = c(NA, data$stop_headsign, NA),
           distance_km = distance_vec,
+          block_length_km = max(distance_vec),
           time_axis = time_vec,
           direction = c(NA, data$direction_id, NA),
           type = c('dead leg', data$type, 'dead leg')
+        )
+        data_summary_add <- data.frame(
+          route_id = route,
+          service_id = service,
+          num_blocks = length(blockVector),
+          num_trips = length(data$trip_id),
+          depot_start_time = format(head(time_vec, 1), format = "%H:%M:%S"),
+          trips_start_time = head(data$departure_time, 1),
+          depot_end_time = format(tail(time_vec, 1)),
+          trips_end_time = tail(data$arrival_time, 1),
+          start_depot = DEFAULT_DEPOT,
+          start_stop_id = head(data$stop_id, 1),
+          start_stop_name = stop_names$stop_name[stop_names$stop_id == head(data$stop_id, 1)],
+          last_stop_id = tail(data$stop_id, 1),
+          last_stop_name = stop_names$stop_name[stop_names$stop_id == tail(data$stop_id, 1)],
+          end_depot = DEFAULT_DEPOT,
+          distance_km = distance_vec,
+          block_length_km = max(distance_vec)
         )
         # Now add stop names
         data_plot_add <- data_plot_add %>%
@@ -518,6 +530,7 @@ repeat{
         data_plot_add$stop_name[c(1, nrow(data_plot_add))] <- DEFAULT_DEPOT
         # Bind with previous & move to next
         data_plot <- rbind(data_plot, data_plot_add)
+        data_summary <- rbind(data_summary, data_summary_add)
       }
     }
   }

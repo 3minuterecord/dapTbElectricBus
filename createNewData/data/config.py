@@ -70,6 +70,8 @@ longLatCol = ['shape_id','shape_pt_lat','shape_pt_lon']
 #---------------------------------------
 SQLDistinct = "SELECT DISTINCT {0} FROM {1}"
 
+SQLDrop = "DROP TABLE {0}"
+
 SQLStr = """SELECT {0} 
              FROM {1}
              WHERE {2} = '{3}'"""

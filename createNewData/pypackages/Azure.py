@@ -56,8 +56,16 @@ class Azure():
         """Upload data dataframe to SQL.
            Requires: Dataframe, new table name 
            and SQL connection"""
+        if tablename == "Elevations":
+            exists = "append"
+        elif tablename  == "shapes":
+            exists = "replace"
+        else: 
+            exists = "replace"
+
         conn = self.AzureDBEng(conn)
-        df.to_sql(tablename, conn, if_exists='replace')
+        df.to_sql(tablename, conn, if_exists=exists)
+        conn.close()
 
     def UploadToMongo(self, collection, MongoData):
         """Upload files to MongoDB.
@@ -77,6 +85,7 @@ class Azure():
         mydb = client[self.in_config.MongoDB]
         mycol = mydb[collection]
         mycol.drop()
+        client.close()
 
     def SelectFromMongo(self):
         """Return all docuements in the MongoDB'shapes' 
@@ -94,6 +103,15 @@ class Azure():
         mydb = client[self.in_config.MongoDB]
         mycol = mydb[newDB]
         client.close()
+    
+    def SQLDrop(self, tablename):
+        """Collect all the distinct shape ID's and loop through each
+           returning the elevation data from the portal.
+           Requires: column and table name"""
+        conn = self.AzureDBConn(self.in_config.teamConnQuote)
+        SQLString = self.in_config.SQLDrop.format(tablename)
+        conn.execute(SQLString)
+        conn.close()
     
     def SelectDistinct(self, column, tablename):
         """Collect all the distinct shape ID's and loop through each

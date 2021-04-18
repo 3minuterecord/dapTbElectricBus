@@ -40,12 +40,12 @@ def main():
             requestSize = 0
             while dictsize(batches["locations"]) +\
                                 dictsize(each) + \
-                                dictsize(batches) < 1024:
+                                dictsize(batches) < 5000:
                 location = value.pop(0)
                 batches["locations"].append(location)
             listOfBatches.append(batches)
         for each in listOfBatches:
-            if dictsize(each) > 1024:
+            if dictsize(each) > 5000:
                 raise Exception(in_config.RequestToBig)
             else:
                 pass
@@ -53,6 +53,14 @@ def main():
             shapeData = Url("mineElevationData",each)
             print(shapeData)
             time.sleep(10)
+        
+        listOfObjects = []
+        listOfElevations = []
+        ListOfDicts = []
+        # try:
+        for each in listOfBatches:
+            ListOfDicts.append(Url("mineElevationData",each))
+            time.sleep(4)
 
     except pd.io.sql.DatabaseError as e:
         print(in_config.NoSQLShema)
@@ -64,6 +72,6 @@ def main():
     except Exception as e:
         print(in_config.UNKMGO)
         print(e)
-        
+
 if __name__ == "__main__":
     main()

@@ -236,6 +236,7 @@ for (route in routesVector){
   }
 }
 
+#stop_analysis_out <- getDbData('SELECT * FROM stop_analysis', conPool)
 
 # Unique Dead Trips
 # =================
@@ -312,6 +313,7 @@ for (row in sequence(nrow(dead_legs_out_unique))){
 ind = 0
 slice_length = 20
 slice <- c(1, slice_length)
+data_summary <- data.frame()
 repeat{
   if (slice[2] == length(routeVector)) {break}
   if (ind != 0) {
@@ -323,7 +325,6 @@ repeat{
   print(paste0('Processing slice ', slice[1], ' to ', slice[2]))
   routesVectorSlice <- routesVector[slice[1]:slice[2]]
   data_plot <- data.frame()
-  data_summary <- data.frame()
   for (route in routesVectorSlice){
     print(paste0('Route ', which(routesVector %in% route), ' of ', length(routesVector)))
     # Trips
@@ -505,23 +506,29 @@ repeat{
           direction = c(NA, data$direction_id, NA),
           type = c('dead leg', data$type, 'dead leg')
         )
+        
+        # Count trips made using run length encoding function
+        trips_made <- rle(data_plot_add$trip_id)$values
+        # Remove NAs which will be the depot trips
+        trips_made <- trips_made[!is.na(trips_made)]
+        
+        # Now summarize the bock as a single row
         data_summary_add <- data.frame(
           route_id = route,
           service_id = service,
-          num_blocks = length(blockVector),
-          num_trips = length(data$trip_id),
+          block = block,
+          num_trips = length(trips_made),
           depot_start_time = format(head(time_vec, 1), format = "%H:%M:%S"),
           trips_start_time = head(data$departure_time, 1),
-          depot_end_time = format(tail(time_vec, 1)),
           trips_end_time = tail(data$arrival_time, 1),
+          depot_end_time = format(tail(time_vec, 1), format = "%H:%M:%S"),
           start_depot = DEFAULT_DEPOT,
           start_stop_id = head(data$stop_id, 1),
           start_stop_name = stop_names$stop_name[stop_names$stop_id == head(data$stop_id, 1)],
           last_stop_id = tail(data$stop_id, 1),
           last_stop_name = stop_names$stop_name[stop_names$stop_id == tail(data$stop_id, 1)],
           end_depot = DEFAULT_DEPOT,
-          distance_km = distance_vec,
-          block_length_km = max(distance_vec)
+          block_length_km = round(max(distance_vec), 3)
         )
         # Now add stop names
         data_plot_add <- data_plot_add %>%
@@ -534,7 +541,7 @@ repeat{
       }
     }
   }
-  ind <- ifelse(ind == 0, TRUE, FALSE)
+  mode <- ifelse(ind == 0, TRUE, FALSE)
   # Save the plot_out data frame to the Azure SQL db 
   print('Saving data to database...')
   saveByChunk(
@@ -578,6 +585,17 @@ saveByChunk(
   chunk_size = 500, 
   dat = dead_legs_out_mod, 
   table_name = 'dead_leg_summary', 
+  connection_pool = conPool,
+  replace = TRUE
+)
+
+# Save the summary info to the data base 
+# =======================================
+# use saveByChunk function from db.R
+saveByChunk(
+  chunk_size = 5000, 
+  dat = data_summary, 
+  table_name = 'block_summary', 
   connection_pool = conPool,
   replace = TRUE
 )

@@ -15,6 +15,7 @@ sidebar <- dashboardSidebar(
     div(img(src="bus-front-green-exp.svg"), style="margin-top: 10px; margin-left: 13px; margin-right: 30px; margin-bottom: 10px;"),
     br(),
     menuItem("Route Analysis", tabName = "analysis", icon = icon("superpowers")),
+    menuItem("Network Summary", tabName = "network", icon = icon("bar-chart")),
     br(),
     div(conditionalPanel(condition="$('html').hasClass('shiny-busy')",
                          img(src="gears.gif")), style="margin-left: 25px;")
@@ -35,18 +36,61 @@ body <- dashboardBody(
               column(6,
                 div(uiOutput('showRouteSelectorControls'), style = 'margin-left: 14px; margin-top: 5px; display: inline-block;'),
                 div(uiOutput('showBlockSelectorControls'), style = 'margin-left: 14px; margin-top: 5px; display: inline-block;'),
+                # Show a loading spinner as this data can be slow to load...     
+                div(
+                  conditionalPanel(
+                    condition = "$('html').hasClass('shiny-busy')", 
+                    div(tags$i(class="fas fa-spinner fa-pulse"), span("Loading Data...", style = 'margin-left: 4px;'), 
+                        class = "pulsate load-msg"),
+                    style = "margin: 15px;"
+                  )
+                ),
                 div(uiOutput('showMainBusMap')),
                 div(uiOutput('showTripTable'))
               ),
               column(6, 
-                div(uiOutput('showDeadTripInfo')),     
+                div(uiOutput('showDeadTripInfo')), 
+                div(
+                  conditionalPanel(
+                    condition = "$('html').hasClass('shiny-busy')", 
+                    div(tags$i(class="fas fa-spinner fa-pulse"), span("Loading Data...", style = 'margin-left: 4px;'), 
+                        class = "pulsate load-msg"),
+                    style = "margin: 15px;"
+                  )
+                ),
                 div(uiOutput('showRoutePlots'))     
               )
             ),
             br(), br(), br(), br(), br(), br(), br(), br()
         )
       )
-    )  
+    ),
+    tabItem(
+      tabName = "network",
+      fluidRow(
+        box(width=12,
+            title = strong(tags$i(class="fa fa-bullseye fa-fw"), "Electric Dublin Bus"), 
+            collapsible = TRUE,
+            solidHeader = TRUE,
+            status = "primary",
+            fluidRow(
+              column(12,
+                # Show a loading spinner as this data can be slow to load...     
+                div(
+                  conditionalPanel(
+                     condition = "$('html').hasClass('shiny-busy')", 
+                     div(tags$i(class="fas fa-spinner fa-pulse"), span("Loading Data...", style = 'margin-left: 4px;'), 
+                         class = "pulsate load-msg"),
+                     style = "margin: 20px;"
+                  )
+                ),
+                div(reactableOutput("networkTable"), style = 'margin-right: 30px;', class = "reactBox")
+              )
+            ),
+            br(), br(), br(), br(), br(), br(), br(), br()
+        )
+      )
+    ) 
   )
 )
 

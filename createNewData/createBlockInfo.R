@@ -41,7 +41,8 @@ depots <- getDbData("SELECT * FROM depots", conPool)
 stop_names <- getDbData("SELECT stop_id, stop_name FROM stops", conPool)
 
 # Datframe of all routes that have trips with details
-routesDf <- getDbData("SELECT DISTINCT route_id FROM trips", conPool)
+routesDf <- getDbData("SELECT DISTINCT route_id FROM bus_routes", conPool)
+#routesDf <- getDbData("SELECT DISTINCT route_id FROM trips", conPool)
 
 # Set options digits to its usual defualt
 options(digits = 7)
@@ -302,6 +303,12 @@ for (row in sequence(nrow(dead_legs_out_unique))){
 }
 
 
+# Prior to moving to the next step, the following Python scripts need to be run:
+# ==============================================================================
+# These esnure that the distance data is available for collation.
+# - ingestNonGtfsRoutes.py
+# - extractTransformLoadroutes.py
+
 # Summary Table & Distance vs Time Plot Data
 # ==========================================
 # Create main block summary table with distances for visualization in
@@ -311,10 +318,10 @@ for (row in sequence(nrow(dead_legs_out_unique))){
 # is done here and output is saved to the Azure SQL db linked ot the app
 
 ind = 0
-slice_length = 20
+slice_length = 30
 slice <- c(1, slice_length)
 data_summary <- data.frame()
-repeat{
+#repeat{
   if (slice[2] == length(routeVector)) {break}
   if (ind != 0) {
     slice <- slice + slice_length
@@ -341,6 +348,14 @@ repeat{
       stops <- getDbData(query, conPool) %>% arrange(trip_id)
 
       if(nrow(stops) != 0){
+        # Ensure that trips are ordered correctly wrt to time
+        # some can be reversed, use run length encoding with rep function
+        run <- rle(stops$trip_id)
+        stops$trip_id_iter <- rep(sequence(length(run$values)), run$lengths)
+        stops <- stops %>%
+          mutate(departure_secs = toSeconds(departure_time)) %>%
+          arrange(trip_id_iter, departure_secs)
+        
         # Create quasi block number data based on departure time diffs
         stops$quasi_block <- c(0, diff(toSeconds(stops$departure_time)))
         # If diff is negative, it is not possible for the same bus to complete
@@ -552,7 +567,7 @@ repeat{
     replace = mode
   )
   if(ind == 0) ind <- ind + 1
-}
+#}
 
 
 # Save the stop_analysis_out data frame to the Azure SQL db 

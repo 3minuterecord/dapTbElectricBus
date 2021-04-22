@@ -6,11 +6,8 @@ library(dplyr)
 # Define webpage for Dublin Bus GTFS data 
 page <- xml2::read_html("https://transitfeeds.com/p/transport-for-ireland/782")
 
-# Get the url for the zip file
-file <- page %>%
-  rvest::html_nodes("a") %>%     # find all links
-  rvest::html_attr("href") %>%   # get the url
-  stringr::str_subset("\\.zip")    # find those that end in zip
+# Get the url for the zip file of the latest zip downloa
+file <- paste0(page, "/latest/download")
 
 # Download the data as a zip file
 download.file(
@@ -93,11 +90,11 @@ library(DBI)
 library(rjson)
 
 # The app's database (SQL azure)
-DATABASE <- "electricbus-eastus-prod-temp"
+DATABASE <- "electricbus-eastus-prod"
 
 "%+%" <- function(...) paste0(...)
 
-DEFAULT_SERVER <- "electricbus-temp.database.windows.net"
+DEFAULT_SERVER <- "electricbus.database.windows.net"
 PORT <- 1433
 USERNAME <- "teamadmin"
 
@@ -121,7 +118,6 @@ for (i in 1:length(names(data))){
     DBI::dbWriteTable(con, name = table_name, value = dat, overwrite = TRUE)    
   }
 }
-
 
 # Bus Depot Coordinates
 # Coordinates from Google Maps pins

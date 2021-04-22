@@ -11,6 +11,9 @@ ON trips (trip_id);
 CREATE INDEX idx_route_id
 ON trips (route_id);
 
+CREATE INDEX idx_route_id
+ON bus_routes (route_id);
+
 CREATE INDEX idx_shape_id
 ON shapes (shape_id);
 

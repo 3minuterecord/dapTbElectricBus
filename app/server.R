@@ -119,9 +119,10 @@ shinyServer(function(input, output, session) {
   # Get shapes details for the trips associated with the selected route
   shapeData <- reactive({
     if(is.null(shapeIds())){return(NULL)}
-    query <- paste0("SELECT shape_id, shape_pt_lat, shape_pt_lon FROM shapes WHERE shape_id IN (", 
+    query <- paste0("SELECT shape_id, shape_pt_lat, shape_pt_lon, shape_pt_sequence FROM shapes WHERE shape_id IN (", 
                     paste0(sprintf("'%s'", shapeIds()), collapse = ', '), ")")
-    data <- getDbData(query, conPool)
+    data <- getDbData(query, conPool) %>%
+      arrange(shape_pt_sequence)
     return(data)
   })
   
@@ -492,32 +493,69 @@ shinyServer(function(input, output, session) {
   # Just use simple verbatim output for now
   # These are quick to display & look good
   output$showDeadTripInfo <- renderUI({
+    if (is.null(dead_shapes_reactive$leg_stats) & is.null(dead_shapes_reactive$stats)){
+      header_text <- 'No dead trip or dead leg data...'
+    } else if (is.null(dead_shapes_reactive$leg_stats) & !is.null(dead_shapes_reactive$stats)){
+      'Dead Trip Details'
+    } else if (!is.null(dead_shapes_reactive$leg_stats) & is.null(dead_shapes_reactive$stats)){
+      'Dead Legs Details'
+    } else {
+      header_text <- 'Dead Trip & Dead Leg Details'  
+    }
+    
     div(
-      div('Dead Trips & Legs', class = 'title-header'),
-      div(verbatimTextOutput('deadLegTable'), style = 'margin: 20px; margin-left: 40px; margin-right: 60px;'),
-      div(verbatimTextOutput('deadTripTable'), style = 'margin: 20px; margin-left: 40px; margin-right: 60px;')
+      div(header_text, class = 'title-header'),
+      div(reactableOutput("deadLegTable"), style = 'margin-right: 30px;', class = "reactBox"),
+      div(reactableOutput("deadTripTable"), style = 'margin-right: 30px;', class = "reactBox")
     )
   })
   
   # Create a reactive to store dead trip & leg shape data
   # so that it can be added to the leaflet map
-  dead_shapes_reactive <- reactiveValues(trips = NULL, legs = NULL, stats = NULL)
+  dead_shapes_reactive <- reactiveValues(trips = NULL, legs = NULL, stats = NULL, leg_stats = NULL)
   
-  # Use render print to display the data frames as verbatim output
-  output$deadLegTable <- renderPrint({
-    if (is.null(dead_shapes_reactive$leg_stats)){
-      'No dead leg data...'
-    } else {
-      dead_shapes_reactive$leg_stats  
-    }
+  # Create reactable table view of dead legs
+  output$deadLegTable <- reactable::renderReactable({
+    if(is.null(dead_shapes_reactive$leg_stats)){return(NULL)}
+    data <- dead_shapes_reactive$leg_stats %>%
+      select(-id, -route_id, -quasi_block)
+      
+    reactable(
+      data,
+      filterable = FALSE,
+      pagination = FALSE,
+      resizable = TRUE,
+      bordered = TRUE,
+      highlight = TRUE,
+      wrap = FALSE,
+      fullWidth = TRUE,
+      class = "react-table",
+      rowStyle = list(cursor = "pointer"),
+      defaultColDef = colDef(
+        headerStyle = list(background = "#f7f7f8")
+      )
+    )
   })
   
-  output$deadTripTable <- renderPrint({
-    if (is.null(dead_shapes_reactive$stats)){
-      'No dead trip data...'
-    } else {
-      dead_shapes_reactive$stats  
-    }
+  # Create reactable table view of dead trips
+  output$deadTripTable <- reactable::renderReactable({
+    if(is.null(dead_shapes_reactive$stats)){return(NULL)}
+    reactable(
+      dead_shapes_reactive$stats,
+      filterable = FALSE,
+      pagination = FALSE,
+      height = 190,
+      resizable = TRUE,
+      bordered = TRUE,
+      highlight = TRUE,
+      wrap = FALSE,
+      fullWidth = TRUE,
+      class = "react-table",
+      rowStyle = list(cursor = "pointer"),
+      defaultColDef = colDef(
+        headerStyle = list(background = "#f7f7f8")
+      )
+    )
   })
   
   # Create a line chart of cumulative distance for the route block
@@ -691,6 +729,38 @@ shinyServer(function(input, output, session) {
             }
           list(fontWeight = 600, color = color)
         })
+      )
+    )
+  })
+  
+  networkData <- reactive({
+    data <- getDbData("SELECT * FROM block_summary", conPool)
+    return(data)
+  })
+  
+  # Create reactable table view of network summary
+  output$networkTable <- reactable::renderReactable({
+    data <- networkData() %>%
+      arrange(desc(block_length_km)) %>%
+      select(-start_stop_id, -last_stop_id) %>%
+      mutate(block_length_km = round(block_length_km, 0))
+    
+    reactable(
+      data,
+      filterable = FALSE,
+      sortable = TRUE,
+      defaultPageSize = 20,
+      showPageSizeOptions = TRUE,
+      pageSizeOptions = c(15, 25, 50, 100, 500),
+      resizable = TRUE,
+      bordered = TRUE,
+      highlight = TRUE,
+      wrap = FALSE,
+      fullWidth = TRUE,
+      class = "react-table",
+      rowStyle = list(cursor = "pointer"),
+      defaultColDef = colDef(
+        headerStyle = list(background = "#f7f7f8")
       )
     )
   })

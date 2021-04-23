@@ -3,46 +3,27 @@
 import pandas as pd
 import importlib.util
 
-def run_all_etlr () :
+def run_all_etlr (keys, connection, conn_string) :
 
     # Load common function file
     spec = importlib.util.spec_from_file_location("functions", "C:/MyApps/dapTbElectricDublinBus/common/functions.py")
     functs = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(functs)
     
-    # Load Access Keys
-    # ================
-    # File path Open secret key file stored local
-    access_keys = functs.load_keys('C:\MyApps\dapTbElectricDublinBus\keys.json')
-    
     #%%
     # Extract Log of Dead TRIPS from Azure SQL DB
-    # ===========================================
-    
-    # Create a connection to the Azure SQL database
-    import pyodbc
-     
-    conn_names = functs.load_connection_names('C:\MyApps\dapTbElectricDublinBus\connection_names.json')
-    server = conn_names.sql_server
-    database = conn_names.sql_database
-    username = conn_names.sql_user
-    connection_string = 'DRIVER={ODBC Driver 13 for SQL Server};SERVER=' + server + \
-        ';DATABASE=' + database +';UID=' + username + ';PWD=' + access_keys.sqldb_pwd
-        
-    conn = pyodbc.connect(connection_string)
-    
+    # ===========================================  
     # Extract the dead_trip_log table created from R script analysis of GTFS
     query = 'SELECT * FROM dead_trip_log'   
-    dead_trip_log = pd.read_sql_query(query, conn)
+    dead_trip_log = pd.read_sql_query(query, connection)
     del query
     
     #%%
     # Extract Log of Dead LEGS from Azure SQL DB
-    # ==========================================
-    
+    # ==========================================    
     # Extract the dead_leg_log table created from R script analysis of GTFS
     query = 'SELECT * FROM dead_leg_log'   
-    dead_leg_log = pd.read_sql_query(query, conn)
+    dead_leg_log = pd.read_sql_query(query, connection)
     
     #%%    
     # Extract Raw Route Data from Azure Cosmos DB for MongoDB API
@@ -52,7 +33,7 @@ def run_all_etlr () :
     # client drivers and tools to interact with your Cosmos database.
     from pymongo import MongoClient
     
-    uri = "mongodb://electric-bus-cosmos-east-us:" + access_keys.cosmos_key + "@electric-bus-cosmos-east-us.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&replicaSet=globaldb&maxIdleTimeMS=120000&appName=@electric-bus-cosmos-east-us@"
+    uri = "mongodb://electric-bus-cosmos-east-us:" + keys.cosmos_key + "@electric-bus-cosmos-east-us.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&replicaSet=globaldb&maxIdleTimeMS=120000&appName=@electric-bus-cosmos-east-us@"
     client = MongoClient(uri)
     
     # Create database
@@ -88,7 +69,7 @@ def run_all_etlr () :
     from sqlalchemy import create_engine
     from urllib.parse import quote_plus
     
-    quoted = quote_plus(connection_string)
+    quoted = quote_plus(conn_string)
     new_con = 'mssql+pyodbc:///?odbc_connect={}'.format(quoted)
     engine = create_engine(new_con,  fast_executemany = True)
     

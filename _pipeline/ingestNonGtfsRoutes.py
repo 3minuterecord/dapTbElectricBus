@@ -11,11 +11,10 @@
 # the end and starting point of two successive trips.
 
 import pandas as pd
-import pyodbc
 from pymongo import MongoClient
 import importlib.util
 
-def run_all_ingr () :
+def run_all_ingr (keys, connection, conn_string) :
 
     # Load common function file
     spec = importlib.util.spec_from_file_location("functions", "C:/MyApps/dapTbElectricDublinBus/common/functions.py")
@@ -23,29 +22,12 @@ def run_all_ingr () :
     spec.loader.exec_module(functs)
     
     
-    #%%
-    # Load Access Keys
-    # ================
-    # File path Open secret key file stored local
-    access_keys = functs.load_keys('C:\MyApps\dapTbElectricDublinBus\keys.json')
-    
-    # Create a connection to the Azure SQL database
-    # =============================================
-    conn_names = functs.load_connection_names('C:\MyApps\dapTbElectricDublinBus\connection_names.json')
-    server = conn_names.sql_server
-    database = conn_names.sql_database
-    username = conn_names.sql_user
-    connection_string = 'DRIVER={ODBC Driver 13 for SQL Server};SERVER=' + server + \
-        ';DATABASE=' + database +';UID=' + username + ';PWD=' + access_keys.sqldb_pwd
-    
-    # Connect to the database    
-    conn = pyodbc.connect(connection_string)
-    
+    #%%      
     # Create Azure Cosmos DB for MongoDB API Connection
     # =================================================
     # Azure Cosmos DB service implements wire protocols for common NoSQL APIs including Cassandra, MongoDB. 
     # This allows you to use your familiar NoSQL client drivers and tools to interact with your Cosmos database.
-    uri = "mongodb://electric-bus-cosmos-east-us:" + access_keys.cosmos_key + "@electric-bus-cosmos-east-us.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&replicaSet=globaldb&maxIdleTimeMS=120000&appName=@electric-bus-cosmos-east-us@"
+    uri = "mongodb://electric-bus-cosmos-east-us:" + keys.cosmos_key + "@electric-bus-cosmos-east-us.mongo.cosmos.azure.com:10255/?ssl=true&retrywrites=false&replicaSet=globaldb&maxIdleTimeMS=120000&appName=@electric-bus-cosmos-east-us@"
     client = MongoClient(uri)
     # Create database
     db = client['bus_routes_nosql']
@@ -59,7 +41,7 @@ def run_all_ingr () :
     api_version = '1.0'
     check_traffic = '0'
     route_api_url = 'https://atlas.microsoft.com/route/directions/batch/sync/json?api-version=' + api_version \
-                            + '&subscription-key=' + access_keys.maps_sub_key + '&traffic=' + check_traffic
+                            + '&subscription-key=' + keys.maps_sub_key + '&traffic=' + check_traffic
     
     #%%
     # Focus on Dead TRIPs
@@ -67,7 +49,7 @@ def run_all_ingr () :
     # Get the stop analysis data from the database and drop duplicates so that 
     # We only have unique dead trips
     query = 'SELECT * FROM stop_analysis'   
-    dead_trips = pd.read_sql_query(query, conn)
+    dead_trips = pd.read_sql_query(query, connection)
     dead_trips_unique = dead_trips[['dead_trip_unique_id', 'trip_first_stop_id', 'trip_last_stop_id']].drop_duplicates()
     # Reset the index after dropping rows
     dead_trips_unique = dead_trips_unique.reset_index()
@@ -82,7 +64,7 @@ def run_all_ingr () :
         api_url = route_api_url, 
         dead_loc = 'trip',
         collection = routes,
-        connection = conn,
+        connection = connection,
         mode = 'stops'
         )
     
@@ -91,7 +73,7 @@ def run_all_ingr () :
     # ===================
     # First get log info from Azure SQL db
     query = 'SELECT * FROM dead_leg_summary'   
-    dead_legs = pd.read_sql_query(query, conn)
+    dead_legs = pd.read_sql_query(query, connection)
     dead_legs_unique = dead_legs[['dead_leg_unique_id', 'start', 'end']].drop_duplicates()
     # Reset the index after dropping rows
     dead_legs_unique = dead_legs_unique.reset_index()
@@ -106,7 +88,7 @@ def run_all_ingr () :
         api_url = route_api_url, 
         dead_loc = 'leg',
         collection = routes,
-        connection = conn,
+        connection = connection,
         mode = 'legs'
         )
     
@@ -128,7 +110,7 @@ def run_all_ingr () :
     from sqlalchemy import create_engine
     from urllib.parse import quote_plus
     
-    quoted = quote_plus(connection_string)
+    quoted = quote_plus(conn_string)
     new_con = 'mssql+pyodbc:///?odbc_connect={}'.format(quoted)
     engine = create_engine(new_con,  fast_executemany = True)
     

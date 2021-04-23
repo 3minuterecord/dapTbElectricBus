@@ -84,10 +84,17 @@ body <- dashboardBody(
                      style = "margin: 20px;"
                   )
                 ),
-                div(uiOutput('showRangePlotTitle')),
-                div(plotlyOutput('rangeBreakdownPlot'), style = 'height: 200px;'),
-                div(uiOutput('showRangePlotNotes')),
-                div(reactableOutput("networkTable"), style = 'margin-right: 30px;', class = "reactBox")
+                div(
+                  div(uiOutput('showRangePlotTitle')),
+                  div(plotlyOutput('rangeBreakdownPlot'), style = 'height: 200px;'),
+                  div(uiOutput('showRangePlotNotes')), style = 'display: inline-block; vertical-align: top;'
+                ),
+                div(
+                  div(uiOutput('showHistoPlotTitle')),
+                  div(plotlyOutput('rangeHistoPlot', height = 230), style = 'height: 220px;'),
+                  style = 'display: inline-block; vertical-align: top; margin-left: 25px; height: 220px;' 
+                ),
+                div(reactableOutput("networkTable"), style = 'margin-right: 30px; margin-top: 2px;', class = "reactBox")
               )
             ),
             br(), br(), br(), br(), br(), br(), br(), br()

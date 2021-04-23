@@ -748,7 +748,9 @@ shinyServer(function(input, output, session) {
   # Create a reactive for holding titles and notes
   # this is used a simple way to delay the appearance of titles & notes
   # until data/charts are ready
-  titlesNotes_reactive <- reactiveValues(range_plot = NULL, range_note = NULL)
+  titlesNotes_reactive <- reactiveValues(
+    range_plot = NULL, range_note = NULL, histo_plot = NULL
+    )
   
   # Display a title for the range plot
   output$showRangePlotTitle <- renderUI({
@@ -822,10 +824,9 @@ shinyServer(function(input, output, session) {
         range = c(0, min((max(data$per) + 40), 110))
         ),
       yaxis = list(title = list(test = "")),
-      
       font = list(size = 11),
       autosize = F,
-      margin = list(pad = 10),
+      margin = list(pad = 10, l = 20),
       showlegend = F
     )
     
@@ -839,6 +840,56 @@ shinyServer(function(input, output, session) {
     # Return the final plot
     return(p)
   })
+  
+  # Display a title for the distance histogram plot
+  output$showHistoPlotTitle <- renderUI({
+    # Takes the reactive value, assigned after plot is ready
+    title <- titlesNotes_reactive$histo_plot 
+    div(title, class = 'title-header')
+  })
+  
+  # Create the range breakdown chart
+  output$rangeHistoPlot <- renderPlotly({
+    # Call the network data
+    data <- networkData() %>%
+      select(group, block_length_km) %>%
+      arrange(group, block_length_km)
+    
+    num1 <- nrow(subset(data, group == 1))
+    print(num1)
+    num2 <- nrow(subset(data, group == 2))
+    num3 <- nrow(subset(data, group == 3))
+    num4 <- nrow(subset(data, group == 4))
+    
+    p <- plot_ly(
+      x = subset(data, group == 1)$block_length_km, 
+      type = "histogram",
+      height = 220,
+      width = 700,
+      marker = list(color = '#70A432'),
+      name = '<b>Distances < 96 km<b>'
+    ) %>% add_histogram(
+      x = subset(data, group == 2)$block_length_km, 
+      marker = list(color = '#FFD869'),
+      name = '<b>Distances 96 km to 160 km<b>'
+    ) %>% add_histogram(
+      x = subset(data, group == 3)$block_length_km, 
+      marker = list(color = '#FFBA00'),
+      name = '<b>Distances 161 km to 300 km<b>'
+    ) %>% add_histogram(
+      x = subset(data, group == 4)$block_length_km, 
+      marker = list(color = '#D33D29'),
+      name = '<b>Distances > 300 km<b>'
+    ) %>% layout(
+      barmode = "overlay",
+      margin = list(pad = 10),
+      font = list(size = 11)
+    )
+    # Now add the title and note details
+    titlesNotes_reactive$histo_plot <- paste0('Histogram of total distances (km) for ', format(nrow(networkData()), big.mark = ','), ' blocks') 
+    return(p)  
+  })
+  
   
   # Create reactable table view of network summary
   output$networkTable <- reactable::renderReactable({

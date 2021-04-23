@@ -736,6 +736,12 @@ shinyServer(function(input, output, session) {
   # Pull network summary data for visualization
   networkData <- reactive({
     data <- getDbData("SELECT * FROM block_summary", conPool)
+    # Create a new group field for holding the bar buckets
+    data$group <- NA 
+    data$group[data$block_length_km <= 96] <- 1
+    data$group[data$block_length_km > 96 & data$block_length_km <= 160] <- 2
+    data$group[data$block_length_km > 160 & data$block_length_km < 300] <- 3
+    data$group[data$block_length_km >= 300] <- 4
     return(data)
   })
   
@@ -761,12 +767,6 @@ shinyServer(function(input, output, session) {
   output$rangeBreakdownPlot <- renderPlotly({
     # Call the network data
     data <- networkData()
-    # Create a new group field for holding the bar buckets
-    data$group <- NA 
-    data$group[data$block_length_km <= 96] <- 1
-    data$group[data$block_length_km > 96 & data$block_length_km <= 160] <- 2
-    data$group[data$block_length_km > 160 & data$block_length_km < 300] <- 3
-    data$group[data$block_length_km >= 300] <- 4
     
     # Now clean & consolidate for use in plot 
     data <- data %>%
@@ -851,6 +851,7 @@ shinyServer(function(input, output, session) {
       data,
       filterable = FALSE,
       sortable = TRUE,
+      searchable = TRUE,
       defaultPageSize = 20,
       showPageSizeOptions = TRUE,
       pageSizeOptions = c(15, 25, 50, 100, 500),
@@ -863,6 +864,31 @@ shinyServer(function(input, output, session) {
       rowStyle = list(cursor = "pointer"),
       defaultColDef = colDef(
         headerStyle = list(background = "#f7f7f8")
+      ),
+      columns = list(
+        group = colDef(
+          cell = function(value) {
+            # Use solid block unicode for group flag, i.e. red, orange or greeen
+            if (!is.na(value)) {
+              symb = "\u2587" 
+            } else {
+              symb = '---'
+            }
+            symb
+          },
+          # change color
+          style = function(value) {
+            if (value == 1) {
+              color <- "#70A432"
+            } else if (value == 2) {
+              color <- "#FFD869"
+            } else if (value == 3) {
+              color <- "#FFBA00"
+            } else {
+              color <- "#D33D29"
+            }
+            list(fontWeight = 600, color = color)
+          })
       )
     )
   })

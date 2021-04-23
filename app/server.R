@@ -855,12 +855,6 @@ shinyServer(function(input, output, session) {
       select(group, block_length_km) %>%
       arrange(group, block_length_km)
     
-    num1 <- nrow(subset(data, group == 1))
-    print(num1)
-    num2 <- nrow(subset(data, group == 2))
-    num3 <- nrow(subset(data, group == 3))
-    num4 <- nrow(subset(data, group == 4))
-    
     p <- plot_ly(
       x = subset(data, group == 1)$block_length_km, 
       type = "histogram",

@@ -504,7 +504,7 @@ shinyServer(function(input, output, session) {
     }
     
     div(
-      div(header_text, class = 'title-header'),
+      div(header_text, class = 'title-header-neg'),
       div(reactableOutput("deadLegTable"), style = 'margin-right: 30px;', class = "reactBox"),
       div(reactableOutput("deadTripTable"), style = 'margin-right: 30px;', class = "reactBox")
     )
@@ -733,9 +733,111 @@ shinyServer(function(input, output, session) {
     )
   })
   
+  # Pull network summary data for visualization
   networkData <- reactive({
     data <- getDbData("SELECT * FROM block_summary", conPool)
     return(data)
+  })
+  
+  # Create a reactive for holding titles and notes
+  # this is used a simple way to delay the appearance of titles & notes
+  # until data/charts are ready
+  titlesNotes_reactive <- reactiveValues(range_plot = NULL, range_note = NULL)
+  
+  # Display a title for the range plot
+  output$showRangePlotTitle <- renderUI({
+    # Takes the reactive value, assigned after plot is ready
+    title <- titlesNotes_reactive$range_plot 
+    div(title, class = 'title-header')
+  })
+  
+  # Display chart notes, again assigned after plot is ready
+  output$showRangePlotNotes <- renderUI({
+    notes <- titlesNotes_reactive$range_note
+    div(span('*', style = 'font-weight: 900; font-size: 15px;'), notes, class = 'plot-notes')
+  })
+  
+  # Create the range breakdown chart
+  output$rangeBreakdownPlot <- renderPlotly({
+    # Call the network data
+    data <- networkData()
+    # Create a new group field for holding the bar buckets
+    data$group <- NA 
+    data$group[data$block_length_km <= 96] <- 1
+    data$group[data$block_length_km > 96 & data$block_length_km <= 160] <- 2
+    data$group[data$block_length_km > 160 & data$block_length_km < 300] <- 3
+    data$group[data$block_length_km >= 300] <- 4
+    
+    # Now clean & consolidate for use in plot 
+    data <- data %>%
+      group_by(group) %>%
+      mutate(pers = round(100 * (n() / nrow(data))), 0) %>%
+      select(group, pers) %>%
+      unique() %>%
+      arrange(group) 
+    
+    # Create the yaxis labels & assign factor levels so that they appear in the
+    # required order
+    data$labs <- c(
+      '<b>Distances < 96 km<b>', 
+      '<b>Distances 96 km to 160 km<b>', 
+      '<b>Distances 161 km to 300 km<b>', 
+      '<b>Distances > 300 km<b>'
+      )
+    data$labs <- factor(data$labs, levels = data$labs)
+    
+    # Add explainer notes to add to hover info
+    data$explainer <- c(
+      'feasible without en route charging.',
+      'may require en route charging in winter',
+      'will likely require some en route charging',
+      'will require significant en route charging.'
+    )
+    
+    p <- plot_ly(
+      data,
+      x = ~pers, 
+      y = ~labs, 
+      marker = list(color = c('#70A432', '#FFD869', '#FFBA00', '#D33D29')),
+      type = 'bar', 
+      orientation = 'h',
+      height = 190,
+      width = 800,
+      hoverinfo = 'text',
+      text = ~paste(paste0(round(pers, 0), '%'), explainer)
+    ) %>% add_text(
+        x = ~pers,
+        y = ~labs,
+        mode = 'text',
+        text = ~paste0("<b> ", round(pers, 0), '% <b>'),
+        textposition = 'right',
+        textfont = list(color = '#000000', size = 12),
+        hoverinfo = 'none'
+    ) %>% layout(
+      xaxis = list(
+        title = list(test = ""),
+        showticklabels = F, 
+        showline = F,
+        showgrid = F,
+        range = c(0, min((max(data$per) + 40), 110))
+        ),
+      yaxis = list(title = list(test = "")),
+      
+      font = list(size = 11),
+      autosize = F,
+      margin = list(pad = 10),
+      showlegend = F
+    )
+    
+    # Now add the title and note details
+    titlesNotes_reactive$range_plot <- 'Block breakdown by total distance travelled (km)'  
+    titlesNotes_reactive$range_note <- 'A typical 12-m long bus with a 320-kWh 
+      battery can cover up to 300 km on favourable days. But in unfavourable cold 
+      conditions, the same bus may only cover between 96 km and 160 km, depending on 
+      the method of heating (i.e., electric or diesel).'  
+    
+    # Return the final plot
+    return(p)
   })
   
   # Create reactable table view of network summary

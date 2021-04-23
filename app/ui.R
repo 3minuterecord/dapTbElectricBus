@@ -14,8 +14,8 @@ sidebar <- dashboardSidebar(
     br(),
     div(img(src="bus-front-green-exp.svg"), style="margin-top: 10px; margin-left: 13px; margin-right: 30px; margin-bottom: 10px;"),
     br(),
-    menuItem("Route Analysis", tabName = "analysis", icon = icon("superpowers")),
     menuItem("Network Summary", tabName = "network", icon = icon("bar-chart")),
+    menuItem("Route Visualization", tabName = "analysis", icon = icon("superpowers")),
     br(),
     div(conditionalPanel(condition="$('html').hasClass('shiny-busy')",
                          img(src="gears.gif")), style="margin-left: 25px;")
@@ -40,7 +40,7 @@ body <- dashboardBody(
                 div(
                   conditionalPanel(
                     condition = "$('html').hasClass('shiny-busy')", 
-                    div(tags$i(class="fas fa-spinner fa-pulse"), span("Loading Data...", style = 'margin-left: 4px;'), 
+                    div(tags$i(class="fas fa-spinner fa-pulse"), span("Loading data...", style = 'margin-left: 4px;'), 
                         class = "pulsate load-msg"),
                     style = "margin: 15px;"
                   )
@@ -53,7 +53,7 @@ body <- dashboardBody(
                 div(
                   conditionalPanel(
                     condition = "$('html').hasClass('shiny-busy')", 
-                    div(tags$i(class="fas fa-spinner fa-pulse"), span("Loading Data...", style = 'margin-left: 4px;'), 
+                    div(tags$i(class="fas fa-spinner fa-pulse"), span("Loading data...", style = 'margin-left: 4px;'), 
                         class = "pulsate load-msg"),
                     style = "margin: 15px;"
                   )
@@ -79,11 +79,14 @@ body <- dashboardBody(
                 div(
                   conditionalPanel(
                      condition = "$('html').hasClass('shiny-busy')", 
-                     div(tags$i(class="fas fa-spinner fa-pulse"), span("Loading Data...", style = 'margin-left: 4px;'), 
+                     div(tags$i(class="fas fa-spinner fa-pulse"), span("Loading data...", style = 'margin-left: 4px;'), 
                          class = "pulsate load-msg"),
                      style = "margin: 20px;"
                   )
                 ),
+                div(uiOutput('showRangePlotTitle')),
+                div(plotlyOutput('rangeBreakdownPlot'), style = 'height: 200px;'),
+                div(uiOutput('showRangePlotNotes')),
                 div(reactableOutput("networkTable"), style = 'margin-right: 30px;', class = "reactBox")
               )
             ),

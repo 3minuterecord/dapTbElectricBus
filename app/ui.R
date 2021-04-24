@@ -91,10 +91,10 @@ body <- dashboardBody(
                 ),
                 div(
                   div(uiOutput('showHistoPlotTitle')),
-                  div(plotlyOutput('rangeHistoPlot', height = 230), style = 'height: 220px;'),
+                  div(plotlyOutput('rangeHistoPlot'), style = 'margin-bottom: 25px;'),
                   style = 'display: inline-block; vertical-align: top; margin-left: 25px; height: 220px;' 
                 ),
-                div(reactableOutput("networkTable"), style = 'margin-right: 30px; margin-top: 2px;', class = "reactBox")
+                div(reactableOutput("networkTable"), style = 'margin-right: 30px; margin-top: 10px;', class = "reactBox")
               )
             ),
             br(), br(), br(), br(), br(), br(), br(), br()

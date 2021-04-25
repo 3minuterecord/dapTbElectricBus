@@ -67,6 +67,7 @@ shinyServer(function(input, output, session) {
                     "' AND service_id = '", input$selected_service, "' AND quasi_block = ", input$selected_block)
     data <- getDbData(query, conPool)
     return(data)
+  })
   # Get distance data
   distanceData <- reactive({
     query <- paste0("SELECT * FROM distances WHERE route_id = '", input$selected_route, "' 
@@ -74,6 +75,7 @@ shinyServer(function(input, output, session) {
                     "' AND quasi_block = ", input$selected_block)
     data <- getDbData(query, conPool)
     return(data) # Get shape ids for the selected block
+  })
   shapeIds <- reactive({
     req(input$selected_block)
     if(is.null(stops())){return(NULL)}
@@ -83,7 +85,7 @@ shinyServer(function(input, output, session) {
                     paste0(sprintf("'%s'", trips), collapse = ', '), ")")
     data <- getDbData(query, conPool)
     return(unique(data$shape_id))
-  }
+  })
   
   # Get shapes details for the trips associated with the selected route
   getShapeData <- function () {
@@ -640,13 +642,13 @@ shinyServer(function(input, output, session) {
     # Takes the reactive value, assigned after plot is ready
     title <- titlesNotes_reactive$range_plot 
     div(title, class = 'title-header')
-  })
+    })
   
   # Display chart notes, again assigned after plot is ready
   output$showRangePlotNotes <- renderUI({
     notes <- titlesNotes_reactive$range_note
     div(span('*', style = 'font-weight: 900; font-size: 15px;'), notes, class = 'plot-notes')
-  })
+    })
   
   # Create the range breakdown chart
   output$rangeBreakdownPlot <- renderPlotly({
@@ -722,14 +724,14 @@ shinyServer(function(input, output, session) {
     
     # Return the final plot
     return(p)
-  })
+    })
   
   # Display a title for the distance histogram plot
   output$showHistoPlotTitle <- renderUI({
     # Takes the reactive value, assigned after plot is ready
     title <- titlesNotes_reactive$histo_plot 
     div(title, class = 'title-header')
-  })
+    })
   
   # Create the range breakdown chart
   output$rangeHistoPlot <- renderPlotly({
@@ -765,7 +767,7 @@ shinyServer(function(input, output, session) {
     # Now add the title and note details
     titlesNotes_reactive$histo_plot <- paste0('Histogram of total distances (km) for ', format(nrow(networkData()), big.mark = ','), ' blocks') 
     return(p)  
-  })
+    })
   
   
   # Create reactable table view of network summary
@@ -816,4 +818,4 @@ shinyServer(function(input, output, session) {
               color <- "#D33D29"
             }
             list(fontWeight = 600, color = color)
-          }) ))})})})})
+          }) ))})})

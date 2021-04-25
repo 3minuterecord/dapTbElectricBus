@@ -92,6 +92,7 @@ shinyServer(function(input, output, session) {
                     "' AND service_id = '", input$selected_service, "' AND quasi_block = ", input$selected_block)
     data <- getDbData(query, conPool)
     return(data)
+<<<<<<< HEAD
   })
   
   # Get distance data
@@ -102,6 +103,9 @@ shinyServer(function(input, output, session) {
     data <- getDbData(query, conPool)
     return(data)
   })
+=======
+  }
+>>>>>>> parent of 1e385e7 (Merge branch 'integration' of https://github.com/3minuterecord/dapTbElectricDublinBus into integration)
   
   # Get shape ids for the selected block
   shapeIds <- reactive({
@@ -617,7 +621,11 @@ shinyServer(function(input, output, session) {
   output$elevationPlot <- renderPlotly({
     req(input$selected_block)
     
+<<<<<<< HEAD
     data_plot <- distanceData() %>%
+=======
+    data_plot <- distanceData$data %>%
+>>>>>>> parent of 1e385e7 (Merge branch 'integration' of https://github.com/3minuterecord/dapTbElectricDublinBus into integration)
       # time was saved as BST hence adjusted to UTC
       # Add the hour back now, BST is 1 hr ahead of UTC
       # TODO --- regenerate db data with times as UTC and not BST

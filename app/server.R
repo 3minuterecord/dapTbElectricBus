@@ -61,26 +61,23 @@ shinyServer(function(input, output, session) {
     return(data$service_id)
   }
   
-  # Get the service_id options for the selected route
-  getBlocks <- function (route, service) {
-    data <- getDbData(
-      paste0("SELECT DISTINCT quasi_block FROM blocks WHERE route_id = '", route, 
-             "' AND service_id = '", service, "'"), conPool) %>% arrange(quasi_block)
-    return(data$quasi_block)
-  }
-  
-  getStops <- function (route, service, block) {
-    query <- paste0("SELECT * FROM distances WHERE route_id = '", route,
-                    "' AND service_id = '", service, "' AND quasi_block = '",
-                    block, "'")
-    data <- getDbData(query, conPool) %>% arrange(distance_km)
+  stop_analysis <- reactive({
+    req(input$selected_route)
+    query <- paste0("SELECT * FROM stop_analysis WHERE route_id = '", input$selected_route, 
+                    "' AND service_id = '", input$selected_service, "' AND quasi_block = ", input$selected_block)
+    data <- getDbData(query, conPool)
     return(data)
-  }
-  
-  # Get shape ids for the selected block
-  getShapeIds <- function (){
-    trips <- stops_reactive$stops$trip_id %>% unique()
-    trips <- unique(trips[!is.na(trips)])
+  # Get distance data
+  distanceData <- reactive({
+    query <- paste0("SELECT * FROM distances WHERE route_id = '", input$selected_route, "' 
+                    AND service_id = '", input$selected_service, 
+                    "' AND quasi_block = ", input$selected_block)
+    data <- getDbData(query, conPool)
+    return(data) # Get shape ids for the selected block
+  shapeIds <- reactive({
+    req(input$selected_block)
+    if(is.null(stops())){return(NULL)}
+    if(nrow(stops()) == 0){return(NULL)}
     
     query <- paste0("SELECT shape_id FROM trips WHERE trip_id IN (", 
                     paste0(sprintf("'%s'", trips), collapse = ', '), ")")
@@ -500,9 +497,9 @@ shinyServer(function(input, output, session) {
   })
   
   output$elevationPlot <- renderPlotly({
-    if(is.null(distanceData$data)){return(NULL)}
+    req(input$selected_block)
     
-    data_plot <- distanceData$data %>%
+
       # time was saved as BST hence adjusted to UTC
       # Add the hour back now, BST is 1 hr ahead of UTC
       # TODO --- regenerate db data with times as UTC and not BST
@@ -819,9 +816,4 @@ shinyServer(function(input, output, session) {
               color <- "#D33D29"
             }
             list(fontWeight = 600, color = color)
-          })
-      )
-    )
-  })
-  
-}) 
+          }) ))})})})})

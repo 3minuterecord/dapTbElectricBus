@@ -16,6 +16,17 @@ shinyServer(function(input, output, session) {
   # Create an SQL database connection pool
   conPool <- getDbPool(DATABASE)
   
+  # Define reactives for storing data after get data action button is pressed
+  shapeData <- reactiveValues(shapes = NULL) # This is for standard trips
+  deadShapes <- reactiveValues(trips = NULL, legs = NULL) # Dead journyes
+  shapeIdsReactive <- reactiveValues() # shape Ids for standard trips
+  distanceData <- reactiveValues(data = NULL) # for distance plot info
+  stops_reactive <- reactiveValues(stops = NULL)
+  
+  # Create a reactive value for the map CSS class so that its applictaion can be delayed 
+  # until data is ready. This simply avoids the box shadow style appearing before the data
+  map_class <- reactiveValues(class = NULL)
+  
   # Get bus depot coordinates
   # But current version only uses one default location
   depots <- reactive({
@@ -25,83 +36,46 @@ shinyServer(function(input, output, session) {
   
   # Get a vector of unique routes that have trips specified
   routesVector <- reactive({
-    data <- getDbData("SELECT DISTINCT route_id FROM trips", conPool) %>% arrange(route_id)
+    data <- getDbData("SELECT DISTINCT route_id FROM blocks", conPool) %>% arrange(route_id)
     return(data$route_id)
   })
   
   # Get the short name of the selected route, e.g, 16A
-  routeName <- reactive({
+  getRouteName <- function(route) {
     # Route is selected from the UI, hence use of routeCounter reactive
-    selected_route <- routesVector()[routeVectorCounter$num]
     data <- getDbData(
-      paste0("SELECT route_short_name FROM bus_routes WHERE route_id = '", selected_route, "'"), 
+      paste0("SELECT route_short_name FROM bus_routes WHERE route_id = '", route, "'"), 
       conPool
-      )
-    return(data$route_short_name)
-  })
+    )
+    return(data$route_short_name[1])
+  }
   
   # Get the service_id options for the selected route
-  services <- reactive({
+  getServices <- function (route) {
     # Route is selected from the UI, hence use of routeCounter reactive
-    selected_route <- routesVector()[routeVectorCounter$num]
     data <- getDbData(
-      paste0("SELECT DISTINCT service_id FROM trips WHERE route_id = '", selected_route, "'"), 
+      paste0("SELECT DISTINCT service_id FROM trips WHERE route_id = '", route, "'"), 
+      #paste0("SELECT DISTINCT service_id FROM trips"), 
       conPool
     ) %>% arrange(service_id)
-   
     return(data$service_id)
-  })
+  }
   
-  stops <- reactive({
-    req(input$selected_route)
-    req(input$selected_service)
-    query <- paste0("SELECT t.route_id, t.trip_id, t.service_id, s.arrival_time, s.departure_time, 
-    s.stop_id, s.stop_headsign, s.shape_dist_traveled, t.direction_id  
-    FROM trips t LEFT JOIN stop_times s ON t.trip_id = s.trip_id WHERE t.route_id = '",
-    input$selected_route, "' AND t.service_id = '", input$selected_service, "'")
-    
-    # Important
-    # =========
-    # Arrange by trip_id is important so that quasi-blocking of routes is effective
-    # trips need to be arranged sequentially to enable a reasonable estimate of what trips
-    # are feasible (ignoring power/fuel considerations) based on timings
-    # trips on the same route are feasible by the same bus if times do not overlap
-    data <- getDbData(query, conPool) %>% arrange(trip_id)  
-    
-    if(nrow(data) != 0){
-      # Create quasi block number data based on departure time diffs
-      data$quasi_block <- c(0, diff(toSeconds(data$departure_time)))
-      # If diff is negative, it is not possible for the same bus to complete
-      # the trip, hence block assumed to terminate
-      data$quasi_block <- ifelse(data$quasi_block < 0, 1, 0)
-      bounds <- length(data$quasi_block[data$quasi_block == 1])
-      data$quasi_block[data$quasi_block == 1] <- (2:(bounds + 1))
-      data$quasi_block[1] <- 1
-      # Now that block bounds have been identified, NA the infill values so
-      # that we can use the na last obs carry forward function to fill with 
-      # the appropriate block number
-      data$quasi_block <- ifelse(data$quasi_block == 0, NA, data$quasi_block)
-      data$quasi_block <- zoo::na.locf(data$quasi_block)
-    }
-    return(data)
-  })
+  # Get the service_id options for the selected route
+  getBlocks <- function (route, service) {
+    data <- getDbData(
+      paste0("SELECT DISTINCT quasi_block FROM blocks WHERE route_id = '", route, 
+             "' AND service_id = '", service, "'"), conPool) %>% arrange(quasi_block)
+    return(data$quasi_block)
+  }
   
-  stop_analysis <- reactive({
-    req(input$selected_route)
-    query <- paste0("SELECT * FROM stop_analysis WHERE route_id = '", input$selected_route, 
-                    "' AND service_id = '", input$selected_service, "' AND quasi_block = ", input$selected_block)
-    data <- getDbData(query, conPool)
+  getStops <- function (route, service, block) {
+    query <- paste0("SELECT * FROM distances WHERE route_id = '", route,
+                    "' AND service_id = '", service, "' AND quasi_block = '",
+                    block, "'")
+    data <- getDbData(query, conPool) %>% arrange(distance_km)
     return(data)
-  })
-  
-  # Get distance data
-  distanceData <- reactive({
-    query <- paste0("SELECT * FROM distances WHERE route_id = '", input$selected_route, "' 
-                    AND service_id = '", input$selected_service, 
-                    "' AND quasi_block = ", input$selected_block)
-    data <- getDbData(query, conPool)
-    return(data)
-  })
+  }
   
   elevationData <- reactive({
     query <- paste0("Select distances.*, ",
@@ -118,28 +92,35 @@ shinyServer(function(input, output, session) {
   })
   
   # Get shape ids for the selected block
-  shapeIds <- reactive({
-    req(input$selected_block)
-    if(is.null(stops())){return(NULL)}
-    if(nrow(stops()) == 0){return(NULL)}
+  getShapeIds <- function (){
+    trips <- stops_reactive$stops$trip_id %>% unique()
+    trips <- unique(trips[!is.na(trips)])
     
-    trips <- stops() %>% filter(quasi_block == input$selected_block)
     query <- paste0("SELECT shape_id FROM trips WHERE trip_id IN (", 
-                    paste0(sprintf("'%s'", unique(trips$trip_id)), collapse = ', '), ")")
+                    paste0(sprintf("'%s'", trips), collapse = ', '), ")")
     data <- getDbData(query, conPool)
-    return(data$shape_id)
-  })
-
+    return(unique(data$shape_id))
+  }
+  
   # Get shapes details for the trips associated with the selected route
-  shapeData <- reactive({
-    if(is.null(shapeIds())){return(NULL)}
-    query <- paste0("SELECT shape_id, shape_pt_lat, shape_pt_lon FROM shapes WHERE shape_id IN (", 
-                    paste0(sprintf("'%s'", shapeIds()), collapse = ', '), ")")
+  getShapeData <- function () {
+    if(is.null(stops_reactive$stops)){return(NULL)}
+    query <- paste0("SELECT shape_id, shape_pt_lat, shape_pt_lon, shape_pt_sequence FROM shapes WHERE shape_id IN (", 
+                    paste0(sprintf("'%s'", shapeIdsReactive$shapes), collapse = ', '), ")")
+    data <- getDbData(query, conPool) %>%
+      arrange(shape_pt_sequence)
+    return(data)
+  }
+  
+  stop_analysis <- reactive({
+    req(input$selected_route)
+    query <- paste0("SELECT * FROM stop_analysis WHERE route_id = '", input$selected_route, 
+                    "' AND service_id = '", input$selected_service, "' AND quasi_block = ", input$selected_block)
     data <- getDbData(query, conPool)
     return(data)
   })
   
-  deadLegShapes <- reactive({
+  getDeadLegShapes <- function () {
     # Get the dead leg data
     query <- paste0("SELECT * FROM dead_leg_summary WHERE route_id = '", input$selected_route, 
                     "' AND quasi_block =", input$selected_block, " AND service_id = '", input$selected_service, "'")
@@ -159,9 +140,9 @@ shinyServer(function(input, output, session) {
       mutate(distance_km = round(distance_km, 2)) %>%
       mutate(time_hrs = round(time_hrs, 2))
     return(dead_leg_shapes)
-  })
+  }
   
-  deadTripShapes <- reactive({
+  getDeadTripShapes <- function () {
     # Get dead trip details for selected route, service & block
     deads <- stop_analysis() %>% 
       mutate(dead_trip_id = as.integer(dead_trip_id)) %>%
@@ -197,184 +178,92 @@ shinyServer(function(input, output, session) {
     }
     
     return(dead_routes)
+  }
+  
+  # Get distance data for selcted route, service and block
+  getDistanceData <- function(route, service, block){
+    query <- paste0("SELECT * FROM distances WHERE route_id = '", route, "' 
+                    AND service_id = '", service, 
+                    "' AND quasi_block = ", block)
+    data <- getDbData(query, conPool) %>% arrange(distance_km)
+    return(data)
+  }
+  
+  # Route selector UI element
+  output$showRouteSelector <- renderUI({
+    div(
+      selectInput(
+        'selected_route',
+        'Route Id',
+        choices = routesVector(),
+        width = 150
+      ), style = 'display: inline-block;'
+    )
   })
   
-  # Create UI elements for selecting route to visualize
-  output$showRouteSelectorControls <- renderUI({
+  # Disabled route name UI element
+  output$showRouteNameSelector <- renderUI({
     div(
-      div(
-        selectInput(
-          'selected_route',
-          'Route Id',
-          choices = routesVector(),
-          selected = routesVector()[routeVectorCounter$num],
-          width = 150
-        ), style = 'display: inline-block;'
-      ),
-      # For now, assume navigation is by route id, show (but disable) name
-      div(
-        shinyjs::disabled(textInput(
-          'selected_route_name',
-          'Name',
-          value = routeName(),
-          width = 90
+      shinyjs::disabled(textInput(
+        'selected_route_name',
+        'Name',
+        value = getRouteName(input$selected_route),
+        width = 90
         )), style = 'display: inline-block; vertical-align: top;'
-      ),
-      div(
-        selectInput(
-          'selected_service',
-          'Service',
-          choices = services(),
-          selected = services()[1],
-          width = 110
-        ), style = 'display: inline-block; vertical-align: top;'
-      ),
-      # Create forward and back buttons for faster navigation through the list of routes
-      div(
-        actionButton(
-          'last_route',
-          'Back',
-          width = 60
-        ), style = 'display: inline-block; margin-left: 10px; margin-top: 26px; vertical-align: top;'
-      ),
-      div(
-        actionButton(
-          'next_route',
-          'Next',
-          width = 60
-        ), style = 'display: inline-block; margin-left: 10px; margin-top: 26px; vertical-align: top;'
       )
-    )
   })
   
-  # Create UI elements for selecting quasi-block to visualize
-  output$showBlockSelectorControls <- renderUI({
-    if(nrow(stops()) == 0){return(NULL)}
+  # Service selector UI element based on selected route
+  output$showServiceSelector <- renderUI({
     div(
-      div(
-        selectInput(
-          'selected_block',
-          'Block',
-          choices = unique(stops()$quasi_block),
-          #selected = routesVector()[routeVectorCounter$num],
-          width = 100
-        ), style = 'display: inline-block; margin-left: 15px;'
-      ),
-      # Create forward and back buttons for faster navigation through the list of routes
-      div(
-        actionButton(
-          'last_block',
-          'Back',
-          width = 60
-        ), style = 'display: inline-block; margin-left: 10px; margin-top: 26px; vertical-align: top;'
-      ),
-      div(
-        actionButton(
-          'next_block',
-          'Next',
-          width = 60
-        ), style = 'display: inline-block; margin-left: 10px; margin-top: 26px; vertical-align: top;'
-      )
+      selectInput(
+        'selected_service',
+        'Service',
+        choices = getServices(input$selected_route),
+        width = 110
+      ), style = 'display: inline-block; vertical-align: top;'
     )
   })
   
-  # Create a counter for navigating through the list of routes
-  # Initialize = 1
-  routeVectorCounter <- reactiveValues(num = 1)
-  
-  # If the drop down for routes is accessed and changes by more that a step of 1
-  # Update the counter to the appropriate index
-  observeEvent(input$selected_route, {
-    blockVectorCounter$num <- 1
-    index <- which(routesVector() == input$selected_route)
-    if (abs(index - routeVectorCounter$num) != 0) {
-      routeVectorCounter$num <- index  
-    }
-  })
-  
-  # If the next button is pressed, udpate the drop down selected & increase the counter by 1
-  # As long as you are not at the end of the list
-  observeEvent(input$next_route, {
-    if (routeVectorCounter$num != length(routesVector())){
-      updateSelectInput(
-        'selected_route',
-        'Route Id',
-        choices = routesVector(),
-        selected = routesVector()[routeVectorCounter$num + 1], 
-        session = session
-      )
-      routeVectorCounter$num <- routeVectorCounter$num + 1  
-    }
-  })
-  
-  # If the back button is pressed, udpate the drop down selected & decrease the counter by 1
-  # As long as you are not at the start of the list
-  observeEvent(input$last_route, {
-    if (routeVectorCounter$num != 1){
-      updateSelectInput(
-        'selected_route',
-        'Route Id',
-        choices = routesVector(),
-        selected = routesVector()[routeVectorCounter$num - 1], 
-        session = session
-      )
-      routeVectorCounter$num <- routeVectorCounter$num - 1  
-    }
-  })
-  
-  # Add a block counter similar to that described above for route counter
-  blockVectorCounter <- reactiveValues(num = 1)
-  
-  observeEvent(input$selected_block, {
-    index <- which(unique(stops()$quasi_block) == input$selected_block)
-    if (abs(index - blockVectorCounter$num) != 0) {
-      blockVectorCounter$num <- index  
-    }
-  })
-  
-  # If the next button is pressed, update the drop down selected & increase the counter by 1
-  # As long as you are not at the end of the list
-  observeEvent(input$next_block, {
-    if (blockVectorCounter$num != length(unique(stops()$quasi_block))){
-      updateSelectInput(
+  # Block selector UI element based on selected route & service
+  output$showBlockSelector <- renderUI({
+    div(
+      selectInput(
         'selected_block',
         'Block',
-        choices = unique(stops()$quasi_block),
-        selected = unique(stops()$quasi_block)[blockVectorCounter$num + 1], 
-        session = session
-      )
-      blockVectorCounter$num <- blockVectorCounter$num + 1  
-    }
+        choices = getBlocks(input$selected_route, input$selected_service),
+        width = 100
+      ), style = 'display: inline-block; margin-left: 15px;'
+    )
   })
   
-  # If the back button is pressed, udpate the drop down selected & decrease the counter by 1
-  # As long as you are not at the start of the list
-  observeEvent(input$last_block, {
-    if (blockVectorCounter$num != 1){
-      updateSelectInput(
-        'selected_block',
-        'Block',
-        choices = unique(stops()$quasi_block),
-        selected = unique(stops()$quasi_block)[blockVectorCounter$num - 1], 
-        session = session
-      )
-      blockVectorCounter$num <- blockVectorCounter$num - 1  
-    }
+  # Action button for collecting data from db for selected route, service, block 
+  output$showActionButton <- renderUI({
+    div(
+      actionButton(
+        'get_data',
+        'Get Data',
+        width = 80
+      ), style = 'display: inline-block; margin-left: 10px; margin-top: 26px; vertical-align: top;'
+    )
   })
   
-  # Create a reactive value for the map CSS class so that its applictaion can be delayed 
-  # until data is ready. This simply avoids the box shadow style appearing before the data
-  map_class <- reactiveValues(class = NULL)
+  # When the Get Data button is pressed, gather the data and save to reactive
+  # value stores
+  observeEvent(input$get_data, {
+    stops_reactive$stops <- getStops(input$selected_route, input$selected_service, input$selected_block)
+    shapeIdsReactive$shapes <- getShapeIds()
+    shapeData$shapes <- getShapeData()
+    deadShapes$trips <- getDeadTripShapes()
+    deadShapes$legs <- getDeadLegShapes()
+    distanceData$data <- getDistanceData(input$selected_route, input$selected_service, input$selected_block)
+  })
+  
   
   # Create the Geo Map in Leaflet for the selected bus route, 
   # dead trips, legs & home depot
   output$busGeoMap <- renderLeaflet({
-    if(nrow(stops()) == 0){return(NULL)}
-    if(is.null(shapeIds())){return(NULL)}
-    
-    req(input$selected_route)
-    req(input$selected_service)
-    req(input$selected_block)
+    if(is.null(stops_reactive$stops)){return(NULL)}
     
     outputMap <- leaflet() %>%
       addFullscreenControl(position = "topleft", pseudoFullscreen = FALSE) %>%
@@ -393,11 +282,11 @@ shinyServer(function(input, output, session) {
     
     # Add dead leg routes as layer 1 (so they do not cover main route or dead trips)
     # Dead leg is a route from depot to/from block start/end
-    if (!is.null(deadLegShapes())){
-      dead_ids <- as.integer(unique(deadLegShapes()$dead_trip_unique_id))
+    if (!is.null(deadShapes$legs)){
+      dead_ids <- as.integer(unique(deadShapes$legs$dead_trip_unique_id))
       
       for (id_dead in dead_ids){
-        dead_df <- deadLegShapes() %>% filter(dead_trip_unique_id == id_dead)
+        dead_df <- deadShapes$legs %>% filter(dead_trip_unique_id == id_dead)
         outputMap <- outputMap %>%
           addPolylines(
             data = dead_df,
@@ -412,15 +301,16 @@ shinyServer(function(input, output, session) {
     }
     
     # Now add route trip shape from reactive data
-    tripIds  <- unique(shapeData()$shape_id)
+    shapeIds <- shapeIdsReactive$shapes
+    
     # Create a counter for the loader
     j = 1
     withProgress(message = 'Loading shapes...', value = 0, {
-      for (id in tripIds){
+      for (id in shapeIds){
         # Show a progress loading bar in bottom right for each shape added...
-        incProgress(1 / length(tripIds), detail = paste(j, " of ", length(tripIds)))
+        incProgress(1 / length(shapeIds), detail = paste(j, " of ", length(shapeIds)))
         j = j + 1 # inc the loader 
-        coords <- shapeData() %>% filter(shape_id == id)
+        coords <- shapeData$shapes %>% filter(shape_id == id)
         # Trip shape plot
         outputMap <- outputMap %>%
           addPolylines(
@@ -437,10 +327,10 @@ shinyServer(function(input, output, session) {
     })
     
     # Now add data for the dead trips
-    if (!is.null(deadTripShapes())){
-      dead_ids <- unique(deadTripShapes()$dead_trip_unique_id)
+    if (!is.null(deadShapes$trips)){
+      dead_ids <- unique(deadShapes$trips$dead_trip_unique_id)
       for (id_dead in dead_ids){
-        dead_df <- deadTripShapes() %>% filter(dead_trip_unique_id == id_dead)
+        dead_df <- deadShapes$trips %>% filter(dead_trip_unique_id == id_dead)
         outputMap <- outputMap %>%
           addPolylines(
             data = dead_df,
@@ -488,9 +378,6 @@ shinyServer(function(input, output, session) {
   
   # UI render for the main bus geo map
   output$showMainBusMap <- renderUI({
-    req(input$selected_route)
-    req(shapeData())
-    req(input$selected_block)
     div(leafletOutput("busGeoMap"), class = map_class$class)
   })
   
@@ -506,49 +393,85 @@ shinyServer(function(input, output, session) {
   # Just use simple verbatim output for now
   # These are quick to display & look good
   output$showDeadTripInfo <- renderUI({
+    if (is.null(distanceData$data)){
+      return(NULL)
+    } else if (is.null(dead_shapes_reactive$leg_stats) & is.null(dead_shapes_reactive$stats)){
+      header_text <- 'No dead trip or dead leg data...'
+    } else if (is.null(dead_shapes_reactive$leg_stats) & !is.null(dead_shapes_reactive$stats)){
+      'Dead Trip Details'
+    } else if (!is.null(dead_shapes_reactive$leg_stats) & is.null(dead_shapes_reactive$stats)){
+      'Dead Legs Details'
+    } else {
+      header_text <- 'Dead Trip & Dead Leg Details'  
+    }
+    
     div(
-      div('Dead Trips & Legs', class = 'title-header'),
-      div(verbatimTextOutput('deadLegTable'), style = 'margin: 20px; margin-left: 40px; margin-right: 60px;'),
-      div(verbatimTextOutput('deadTripTable'), style = 'margin: 20px; margin-left: 40px; margin-right: 60px;')
+      div(header_text, class = 'title-header-neg'),
+      div(reactableOutput("deadLegTable"), style = 'margin-right: 30px;', class = "reactBox"),
+      div(reactableOutput("deadTripTable"), style = 'margin-right: 30px;', class = "reactBox")
     )
   })
   
   # Create a reactive to store dead trip & leg shape data
   # so that it can be added to the leaflet map
-  dead_shapes_reactive <- reactiveValues(trips = NULL, legs = NULL, stats = NULL)
+  dead_shapes_reactive <- reactiveValues(trips = NULL, legs = NULL, stats = NULL, leg_stats = NULL)
   
-  # Use render print to display the data frames as verbatim output
-  output$deadLegTable <- renderPrint({
-    if (is.null(dead_shapes_reactive$leg_stats)){
-      'No dead leg data...'
-    } else {
-      dead_shapes_reactive$leg_stats  
-    }
+  # Create reactable table view of dead legs
+  output$deadLegTable <- reactable::renderReactable({
+    if(is.null(distanceData$data)){return(NULL)}
+    if(is.null(dead_shapes_reactive$leg_stats)){return(NULL)}
+    
+    data <- dead_shapes_reactive$leg_stats %>%
+      select(-id, -route_id, -quasi_block)
+    
+    reactable(
+      data,
+      filterable = FALSE,
+      pagination = FALSE,
+      resizable = TRUE,
+      bordered = TRUE,
+      highlight = TRUE,
+      wrap = FALSE,
+      fullWidth = TRUE,
+      class = "react-table",
+      rowStyle = list(cursor = "pointer"),
+      defaultColDef = colDef(
+        headerStyle = list(background = "#f7f7f8")
+      )
+    )
   })
   
-  output$deadTripTable <- renderPrint({
-    if (is.null(dead_shapes_reactive$stats)){
-      'No dead trip data...'
-    } else {
-      dead_shapes_reactive$stats  
-    }
+  # Create reactable table view of dead trips
+  output$deadTripTable <- reactable::renderReactable({
+    if(is.null(distanceData$data)){return(NULL)}
+    if(is.null(dead_shapes_reactive$stats)){return(NULL)}
+    reactable(
+      dead_shapes_reactive$stats,
+      filterable = FALSE,
+      pagination = FALSE,
+      height = 190,
+      resizable = TRUE,
+      bordered = TRUE,
+      highlight = TRUE,
+      wrap = FALSE,
+      fullWidth = TRUE,
+      class = "react-table",
+      rowStyle = list(cursor = "pointer"),
+      defaultColDef = colDef(
+        headerStyle = list(background = "#f7f7f8")
+      )
+    )
   })
   
   # Create a line chart of cumulative distance for the route block
   # Include dead trip & leg distances
   output$distancePlot <- renderPlotly({
-    req(input$selected_block)
+    if(is.null(distanceData$data)){return(NULL)}
     
-    data_plot <- distanceData() %>%
-      # time was saved as BST hence adjusted to UTC
-      # Add the hour back now, BST is 1 hr ahead of UTC
-      # TODO --- regenerate db data with times as UTC and not BST
-      mutate(time_axis = time_axis + (1*60*60)) %>%
+    data_plot <- distanceData$data %>%
       arrange(time_axis) %>%
       rename('distance' = distance_km)
     
-    
-
     # Now create the plot using Plotly
     p <- plot_ly(
       data_plot, 
@@ -561,7 +484,7 @@ shinyServer(function(input, output, session) {
       line = list(color = '#1C2D38'),
       hoverinfo = 'text', 
       text = ~paste0(round(distance, 1), " km @ ", format(time_axis, '%H:%M'))
-      )
+    )
     
     #Add text for the total distance traveled
     p <- p %>% add_text(
@@ -572,12 +495,12 @@ shinyServer(function(input, output, session) {
       textposition = 'right',
       textfont = list(color = '#000000', size = 13)
     )
-
+    
     # Add some final layout mods
     p <- p %>% layout(
       title = "",
       yaxis = list(title = list(text = '<b>Distance (km)</b>',  standoff = 20L),
-      rangemode = "nonnegative"),
+                   rangemode = "nonnegative"),
       showlegend = FALSE,
       font = list(size = 11),
       xaxis = list(
@@ -586,14 +509,18 @@ shinyServer(function(input, output, session) {
         type = 'date',
         tickformat = "%H:%M",
         margin = list(pad = 5)
-        )
+      )
     )
   })
   
   output$elevationPlot <- renderPlotly({
-    req(input$selected_block)
+    if(is.null(distanceData$data)){return(NULL)}
     
+<<<<<<< HEAD
     data_plot <- elevationData() %>%
+=======
+    data_plot <- distanceData$data %>%
+>>>>>>> jason-dev
       # time was saved as BST hence adjusted to UTC
       # Add the hour back now, BST is 1 hr ahead of UTC
       # TODO --- regenerate db data with times as UTC and not BST
@@ -652,14 +579,15 @@ shinyServer(function(input, output, session) {
   
   # Create reactable table view of trips for selected route
   output$tripTable <- reactable::renderReactable({
-    req(input$selected_block)
-    data <- distanceData() %>%
+    if(is.null(distanceData$data)){return(NULL)}
+    
+    data <- distanceData$data %>%
       select(arrival_time, departure_time, stop_headsign, stop_name, type, direction)
-
+    
     # Convert direction from 1/0 to In/Out
     data$direction[data$direction == '1'] <- 'In'
     data$direction[data$direction == '0'] <- 'Out'
-   
+    
     reactable(
       data,
       filterable = FALSE,
@@ -705,9 +633,215 @@ shinyServer(function(input, output, session) {
             } else {
               color <- "#1C2D38"
             }
-          list(fontWeight = 600, color = color)
-        })
+            list(fontWeight = 600, color = color)
+          })
       )
     )
   })
+  
+  # Pull network summary data for visualization
+  networkData <- reactive({
+    data <- getDbData("SELECT * FROM block_summary", conPool)
+    # Create a new group field for holding the bar buckets
+    data$group <- NA 
+    data$group[data$block_length_km <= 96] <- 1
+    data$group[data$block_length_km > 96 & data$block_length_km <= 160] <- 2
+    data$group[data$block_length_km > 160 & data$block_length_km < 300] <- 3
+    data$group[data$block_length_km >= 300] <- 4
+    return(data)
+  })
+  
+  # Create a reactive for holding titles and notes
+  # this is used a simple way to delay the appearance of titles & notes
+  # until data/charts are ready
+  titlesNotes_reactive <- reactiveValues(
+    range_plot = NULL, range_note = NULL, histo_plot = NULL
+  )
+  
+  # Display a title for the range plot
+  output$showRangePlotTitle <- renderUI({
+    # Takes the reactive value, assigned after plot is ready
+    title <- titlesNotes_reactive$range_plot 
+    div(title, class = 'title-header')
+  })
+  
+  # Display chart notes, again assigned after plot is ready
+  output$showRangePlotNotes <- renderUI({
+    notes <- titlesNotes_reactive$range_note
+    div(span('*', style = 'font-weight: 900; font-size: 15px;'), notes, class = 'plot-notes')
+  })
+  
+  # Create the range breakdown chart
+  output$rangeBreakdownPlot <- renderPlotly({
+    # Call the network data
+    data <- networkData()
+    
+    # Now clean & consolidate for use in plot 
+    data <- data %>%
+      group_by(group) %>%
+      mutate(pers = round(100 * (n() / nrow(data))), 0) %>%
+      select(group, pers) %>%
+      unique() %>%
+      arrange(group) 
+    
+    # Create the yaxis labels & assign factor levels so that they appear in the
+    # required order
+    data$labs <- c(
+      '<b>Distances < 96 km<b>', 
+      '<b>Distances 96 km to 160 km<b>', 
+      '<b>Distances 161 km to 300 km<b>', 
+      '<b>Distances > 300 km<b>'
+    )
+    data$labs <- factor(data$labs, levels = data$labs)
+    
+    # Add explainer notes to add to hover info
+    data$explainer <- c(
+      'feasible without en route charging.',
+      'may require en route charging in winter',
+      'will likely require some en route charging',
+      'will require significant en route charging.'
+    )
+    
+    p <- plot_ly(
+      data,
+      x = ~pers, 
+      y = ~labs, 
+      marker = list(color = c('#70A432', '#FFD869', '#FFBA00', '#D33D29')),
+      type = 'bar', 
+      orientation = 'h',
+      height = 190,
+      width = 800,
+      hoverinfo = 'text',
+      text = ~paste(paste0(round(pers, 0), '%'), explainer)
+    ) %>% add_text(
+      x = ~pers,
+      y = ~labs,
+      mode = 'text',
+      text = ~paste0("<b> ", round(pers, 0), '% <b>'),
+      textposition = 'right',
+      textfont = list(color = '#000000', size = 12),
+      hoverinfo = 'none'
+    ) %>% layout(
+      xaxis = list(
+        title = list(test = ""),
+        showticklabels = F, 
+        showline = F,
+        showgrid = F,
+        range = c(0, min((max(data$per) + 40), 110))
+      ),
+      yaxis = list(title = list(test = "")),
+      font = list(size = 11),
+      autosize = F,
+      margin = list(pad = 10, l = 20),
+      showlegend = F
+    )
+    
+    # Now add the title and note details
+    titlesNotes_reactive$range_plot <- 'Block breakdown by total distance travelled (km)'  
+    titlesNotes_reactive$range_note <- 'A typical 12-m long bus with a 320-kWh 
+      battery can cover up to 300 km on favourable days. But in unfavourable cold 
+      conditions, the same bus may only cover between 96 km and 160 km, depending on 
+      the method of heating (i.e., electric or diesel).'  
+    
+    # Return the final plot
+    return(p)
+  })
+  
+  # Display a title for the distance histogram plot
+  output$showHistoPlotTitle <- renderUI({
+    # Takes the reactive value, assigned after plot is ready
+    title <- titlesNotes_reactive$histo_plot 
+    div(title, class = 'title-header')
+  })
+  
+  # Create the range breakdown chart
+  output$rangeHistoPlot <- renderPlotly({
+    # Call the network data
+    data <- networkData() %>%
+      select(group, block_length_km) %>%
+      arrange(group, block_length_km)
+    
+    p <- plot_ly(
+      x = subset(data, group == 1)$block_length_km, 
+      type = "histogram",
+      height = 220,
+      width = 700,
+      marker = list(color = '#70A432'),
+      name = '<b>Distances < 96 km<b>'
+    ) %>% add_histogram(
+      x = subset(data, group == 2)$block_length_km, 
+      marker = list(color = '#FFD869'),
+      name = '<b>Distances 96 km to 160 km<b>'
+    ) %>% add_histogram(
+      x = subset(data, group == 3)$block_length_km, 
+      marker = list(color = '#FFBA00'),
+      name = '<b>Distances 161 km to 300 km<b>'
+    ) %>% add_histogram(
+      x = subset(data, group == 4)$block_length_km, 
+      marker = list(color = '#D33D29'),
+      name = '<b>Distances > 300 km<b>'
+    ) %>% layout(
+      barmode = "overlay",
+      margin = list(pad = 10),
+      font = list(size = 11)
+    )
+    # Now add the title and note details
+    titlesNotes_reactive$histo_plot <- paste0('Histogram of total distances (km) for ', format(nrow(networkData()), big.mark = ','), ' blocks') 
+    return(p)  
+  })
+  
+  
+  # Create reactable table view of network summary
+  output$networkTable <- reactable::renderReactable({
+    data <- networkData() %>%
+      arrange(desc(block_length_km)) %>%
+      select(-start_stop_id, -last_stop_id) %>%
+      mutate(block_length_km = round(block_length_km, 0))
+    
+    reactable(
+      data,
+      filterable = FALSE,
+      sortable = TRUE,
+      searchable = TRUE,
+      defaultPageSize = 20,
+      showPageSizeOptions = TRUE,
+      pageSizeOptions = c(15, 25, 50, 100, 500),
+      resizable = TRUE,
+      bordered = TRUE,
+      highlight = TRUE,
+      wrap = FALSE,
+      fullWidth = TRUE,
+      class = "react-table",
+      rowStyle = list(cursor = "pointer"),
+      defaultColDef = colDef(
+        headerStyle = list(background = "#f7f7f8")
+      ),
+      columns = list(
+        group = colDef(
+          cell = function(value) {
+            # Use solid block unicode for group flag, i.e. red, orange or greeen
+            if (!is.na(value)) {
+              symb = "\u2587" 
+            } else {
+              symb = '---'
+            }
+            symb
+          },
+          # change color
+          style = function(value) {
+            if (value == 1) {
+              color <- "#70A432"
+            } else if (value == 2) {
+              color <- "#FFD869"
+            } else if (value == 3) {
+              color <- "#FFBA00"
+            } else {
+              color <- "#D33D29"
+            }
+            list(fontWeight = 600, color = color)
+          })
+      )
+    )
+  })
+  
 }) 

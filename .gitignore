@@ -145,4 +145,11 @@ keys.json
 
 # Py chace
 common/__pycache__
+<<<<<<< HEAD
 >>>>>>> integration
+=======
+
+temp.R
+test/
+_pipeline/raw
+>>>>>>> jason-dev

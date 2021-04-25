@@ -77,6 +77,20 @@ shinyServer(function(input, output, session) {
     return(data)
   }
   
+  elevationData <- reactive({
+    query <- paste0("Select distances.*, ",
+                     "elevation.elevation ",
+                     "FROM distances, stops, elevation ",
+                     "WHERE distances.stop = stops.stop_id ",
+                     "AND stops.stop_lat = elevation.latitude ",
+                     "AND stops.stop_lon = elevation.longitude ",
+                     "AND route_id = ","'",input$selected_route,"' ",
+                     "AND service_id = ","'",input$selected_service, "' ",
+                     "AND quasi_block = ","'",input$selected_block,"'")
+    data <- getDbData(query, conPool)
+    return(data)
+  })
+  
   # Get shape ids for the selected block
   getShapeIds <- function (){
     trips <- stops_reactive$stops$trip_id %>% unique()
@@ -502,7 +516,11 @@ shinyServer(function(input, output, session) {
   output$elevationPlot <- renderPlotly({
     if(is.null(distanceData$data)){return(NULL)}
     
+<<<<<<< HEAD
     data_plot <- distanceData$data %>%
+=======
+    data_plot <- elevationData() %>%
+>>>>>>> James-Dev
       # time was saved as BST hence adjusted to UTC
       # Add the hour back now, BST is 1 hr ahead of UTC
       # TODO --- regenerate db data with times as UTC and not BST
@@ -515,22 +533,24 @@ shinyServer(function(input, output, session) {
     p <- plot_ly(
       data_plot, 
       x = ~time_axis, 
-      y = ~distance, 
+      y = ~elevation, 
       type = 'scatter', 
       mode = 'lines',
       height = 230, 
-      name = 'Distance',
+      name = 'Elevation',
       line = list(color = '#1C2D38'),
-      hoverinfo = 'text', 
-      text = ~paste0(round(distance, 1), " km @ ", format(time_axis, '%H:%M'))
+      hoverinfo = 'elevationText', 
+      rangemode="tozero",
+      fill = 'tozeroy',
+      elevationText = ~paste0(round(elevation, 1), " MAMSL @ ", format(time_axis, '%H:%M'))
     )
     
-    #Add text for the total distance traveled
+    #Add text for the elevation plot
     p <- p %>% add_text(
       x = max(data_plot$time_axis),
-      y = max(data_plot$distance),
+      y = max(data_plot$elevation),
       mode = 'text',
-      text = paste0("<b> ", round(max(data_plot$distance), 1), 'km <b>'),
+      text = paste0("<b> ", round(max(data_plot$elevation), 1), 'MAMSL <b>'),
       textposition = 'right',
       textfont = list(color = '#000000', size = 13)
     )
@@ -538,7 +558,7 @@ shinyServer(function(input, output, session) {
     # Add some final layout mods
     p <- p %>% layout(
       title = "",
-      yaxis = list(title = list(text = '<b>Distance (km)</b>',  standoff = 20L),
+      yaxis = list(title = list(text = '<b>Elevation (MAMSL)</b>',  standoff = 20L),
                    rangemode = "nonnegative"),
       showlegend = FALSE,
       font = list(size = 11),

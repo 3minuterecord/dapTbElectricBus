@@ -100,6 +100,7 @@ shinyServer(function(input, output, session) {
   
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
   # Get distance data
   distanceData <- reactive({
     query <- paste0("SELECT * FROM distances WHERE route_id = '", input$selected_route, "' 
@@ -116,6 +117,8 @@ shinyServer(function(input, output, session) {
 >>>>>>> parent of 1e385e7 (Merge branch 'integration' of https://github.com/3minuterecord/dapTbElectricDublinBus into integration)
 =======
 >>>>>>> parent of 9e13b1c (Merge branch 'integration' of https://github.com/3minuterecord/dapTbElectricDublinBus into integration)
+=======
+>>>>>>> parent of b5826b9 (Integrate James_Dev To Integration)
   # Get shape ids for the selected block
   shapeIds <- reactive({
     req(input$selected_block)
@@ -634,6 +637,7 @@ shinyServer(function(input, output, session) {
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
     data_plot <- distanceData() %>%
 =======
     data_plot <- distanceData$data %>%
@@ -647,6 +651,9 @@ shinyServer(function(input, output, session) {
 =======
     data_plot <- distanceData$data %>%
 >>>>>>> parent of 9e13b1c (Merge branch 'integration' of https://github.com/3minuterecord/dapTbElectricDublinBus into integration)
+=======
+    data_plot <- distanceData$data %>%
+>>>>>>> parent of b5826b9 (Integrate James_Dev To Integration)
       # time was saved as BST hence adjusted to UTC
       # Add the hour back now, BST is 1 hr ahead of UTC
       # TODO --- regenerate db data with times as UTC and not BST

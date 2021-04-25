@@ -56,16 +56,9 @@ class Azure():
         """Upload data dataframe to SQL.
            Requires: Dataframe, new table name 
            and SQL connection"""
-        if tablename == "Elevations":
-            exists = "append"
-        elif tablename  == "shapes":
-            exists = "replace"
-        else: 
-            exists = "replace"
 
         conn = self.AzureDBEng(conn)
-        df.to_sql(tablename, conn, if_exists=exists)
-        conn.close()
+        df.to_sql(tablename, conn, if_exists="replace")
 
     def UploadToMongo(self, collection, MongoData):
         """Upload files to MongoDB.

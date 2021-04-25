@@ -5,6 +5,7 @@ import os
 #---------------------------------------
 url = 'https://api.open-elevation.com/api/v1/lookup'
 url2 = 'https://gtfsr.transportforireland.ie/v1/?format=json'
+GTFSURL = 'https://www.transportforireland.ie/transitData/google_transit_combined.zip'
 
 
 #---------------------------------------
@@ -55,7 +56,7 @@ MongoDB = "shapes"
 # Local Folder Locations
 #---------------------------------------
 shapes = r"C:\Users\James\Documents\MSc in Data Analytics\Database and Ananytics\Research Project\dapTbElectricDublinBus\ingestRawData\raw\shapes.txt"
-
+stops = r"C:\Users\James\Documents\MSc in Data Analytics\Database and Ananytics\Research Project\dapTbElectricDublinBus\ingestRawData\raw\stops.txt"
 
 #---------------------------------------
 # Columns required for returning the 
@@ -88,6 +89,7 @@ SQLElevation = """SELECT
                     AND
                     [dbo].[shapes].shape_pt_lon = [dbo].[elevations].longitude
                """
+
 
 SQLCreateElevation = """CREATE TABLE elevations (
                         PersonID int,

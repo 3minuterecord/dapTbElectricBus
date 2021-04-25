@@ -246,3 +246,10 @@ def getRouteInfo (trip_vec, start_vec, end_vec, api_url, dead_loc, collection, c
     dead_route_log_df['object_id'] = dead_route_log_df['object_id'].astype(str)
         
     return(dead_route_log_df)
+
+# Create a simple function for adding an index to an SQL DB
+def createIndex (col, table, curs) :
+    query_string = 'CREATE INDEX idx_{0} ON {1} ({0})'.format(col, table)  
+    curs.execute(query_string)
+
+        

@@ -36,10 +36,6 @@ a:active, a:focus, a:hover {
   color :  #909698;
 }
 
-.main-header .sidebar-toggle:hover{
-  background-color: #233845 !important;
-}
-
 .main-header .logo {
         font-family: "Ubuntu", Tahoma, "Helvetica Neue", sans-serif;
         font-weight: normal;
@@ -253,6 +249,10 @@ a:active, a:focus, a:hover {
   font-weight: 700;
   font-size: 14px;
   margin-left: 15px;
+}
+
+.btn-danger{
+  color: #FFFFFF !important;
 }
 
 .plot-notes {

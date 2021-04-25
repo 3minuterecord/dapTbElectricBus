@@ -93,6 +93,9 @@ shinyServer(function(input, output, session) {
     data <- getDbData(query, conPool)
     return(data)
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> parent of 42f8334 (Remove dead code from histogram plot)
   })
   
   # Get distance data
@@ -622,10 +625,14 @@ shinyServer(function(input, output, session) {
     req(input$selected_block)
     
 <<<<<<< HEAD
+<<<<<<< HEAD
     data_plot <- distanceData() %>%
 =======
     data_plot <- distanceData$data %>%
 >>>>>>> parent of 1e385e7 (Merge branch 'integration' of https://github.com/3minuterecord/dapTbElectricDublinBus into integration)
+=======
+    data_plot <- distanceData() %>%
+>>>>>>> parent of 42f8334 (Remove dead code from histogram plot)
       # time was saved as BST hence adjusted to UTC
       # Add the hour back now, BST is 1 hr ahead of UTC
       # TODO --- regenerate db data with times as UTC and not BST

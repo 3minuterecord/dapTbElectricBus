@@ -129,6 +129,7 @@ appsettings.json
 local.settings.json
 .python_packages
 .Rproj.user
+.Rhistory
 
 # Ignore rsconnect for now
 rsconnect

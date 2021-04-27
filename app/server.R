@@ -223,13 +223,16 @@ shinyServer(function(input, output, session) {
     )
   })
   
+  getDataReactive <- reactiveValues(text = 'Load Data')
+  
   # Action button for collecting data from db for selected route, service, block 
   output$showActionButton <- renderUI({
     div(
       actionButton(
         'get_data',
-        'Get Data',
-        width = 80
+        getDataReactive$text,
+        width = 95,
+        class = NULL
       ), style = 'display: inline-block; margin-left: 10px; margin-top: 26px; vertical-align: top;'
     )
   })
@@ -243,8 +246,8 @@ shinyServer(function(input, output, session) {
     deadShapes$trips <- getDeadTripShapes()
     deadShapes$legs <- getDeadLegShapes()
     distanceData$data <- getDistanceData(input$selected_route, input$selected_service, input$selected_block)
+    getDataReactive$text <- 'Refresh Data'
   })
-  
   
   # Create the Geo Map in Leaflet for the selected bus route, 
   # dead trips, legs & home depot
@@ -384,9 +387,9 @@ shinyServer(function(input, output, session) {
     } else if (is.null(dead_shapes_reactive$leg_stats) & is.null(dead_shapes_reactive$stats)){
       header_text <- 'No dead trip or dead leg data...'
     } else if (is.null(dead_shapes_reactive$leg_stats) & !is.null(dead_shapes_reactive$stats)){
-      'Dead Trip Details'
+      header_text <- 'Dead Trip Details'
     } else if (!is.null(dead_shapes_reactive$leg_stats) & is.null(dead_shapes_reactive$stats)){
-      'Dead Legs Details'
+      header_text <- 'Dead Legs Details'
     } else {
       header_text <- 'Dead Trip & Dead Leg Details'  
     }

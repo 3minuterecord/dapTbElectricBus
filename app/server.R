@@ -78,6 +78,12 @@ shinyServer(function(input, output, session) {
     return(data)
   }
   
+  getStopNames <- reactive({
+    query <- "SELECT stop_id, stop_name FROM stops"
+    data <- getDbData(query, conPool)
+    return(data)
+  })
+  
   # Get shape ids for the selected block
   getShapeIds <- function (){
     trips <- stops_reactive$stops$trip_id %>% unique()
@@ -243,6 +249,8 @@ shinyServer(function(input, output, session) {
   
   # Action button for collecting data from db for selected route, service, block 
   output$showActionButton <- renderUI({
+    if(is.null(input$selected_route) | is.null(input$selected_service) | is.null(input$selected_block)){return(NULL)}
+    if(input$selected_route == "" | input$selected_service == "" | input$selected_block ==""){return(NULL)}
     div(
       actionButton(
         'get_data',
@@ -429,6 +437,11 @@ shinyServer(function(input, output, session) {
     data <- dead_shapes_reactive$leg_stats %>%
       select(-id, -route_id, -quasi_block)
     
+    # Label stop id names
+    stop_names <- getStopNames()
+    data$start[2] <- stop_names$stop_name[stop_names$stop_id == data$start[2]] 
+    data$end[1] <- stop_names$stop_name[stop_names$stop_id == data$end[1]]  
+    
     reactable(
       data,
       filterable = FALSE,
@@ -450,8 +463,18 @@ shinyServer(function(input, output, session) {
   output$deadTripTable <- reactable::renderReactable({
     if(is.null(distanceData$data)){return(NULL)}
     if(is.null(dead_shapes_reactive$stats)){return(NULL)}
+    
+    data <- dead_shapes_reactive$stats
+    
+    # Label stop id names
+    data <- left_join(data, getStopNames(), by = c('from_stop' = 'stop_id')) %>%
+      left_join(getStopNames(), by = c('to_stop' = 'stop_id')) %>%
+      select(stop_name.x, stop_name.y, start, end, schedule_hrs, travel_hrs, distance_km) %>%
+      rename(from_stop = 'stop_name.x') %>%
+      rename(to_stop = 'stop_name.y')
+    
     reactable(
-      dead_shapes_reactive$stats,
+      data,
       filterable = FALSE,
       pagination = FALSE,
       height = 190,

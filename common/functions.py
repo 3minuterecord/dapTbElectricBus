@@ -206,18 +206,21 @@ def getRouteInfo (trip_vec, start_vec, end_vec, api_url, dead_loc, collection, c
                                                      coords.end_stop_lat, coords.end_stop_lon)
         payload = {'batchItems': [{'query': query_item}]}
         headers = {'Content-Type': 'application/json'}
-    
-        # Request the response from Azure maps
-        response = requests.request("POST", api_url, headers=headers, data=json.dumps(payload))
         
-        # checking the status code of the request
-        if response.status_code == 200:
-           # Convert json to python dictionary
-           response_data = json.loads(response.text)
-           print("Successful HTTP request")
-        else:   
-           print("Error in the HTTP request")
-    
+        # Send the POST request 
+        try :
+            # Request the response from Azure maps
+            response = requests.request("POST", api_url, headers=headers, data=json.dumps(payload))
+            # checking the status code of the request
+            if response.status_code == 200:
+                # Convert json to python dictionary
+                response_data = json.loads(response.text)
+                print("Successful HTTP request")
+            else:   
+                raise Exception('Error in the HTTP request')
+        except Exception as e:
+            print('Error1' + str(e))     
+            
         # Grab the route data recieved frm Azure Maps 
         route = response_data
         # Write Azure maps data to MongoDB & return the ID

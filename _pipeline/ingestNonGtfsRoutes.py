@@ -47,13 +47,11 @@ def run_all_ingr (keys, connection, conn_string) :
     # Focus on Dead TRIPs
     # ===================
     # Get the stop analysis data from the database and drop duplicates so that 
-    # We only have unique dead trips
-    query = 'SELECT * FROM stop_analysis'   
-    dead_trips = pd.read_sql_query(query, connection)
+    # We only have unique dead trips    
+    dead_trips = pd.read_sql_query('SELECT * FROM stop_analysis', connection)
     dead_trips_unique = dead_trips[['dead_trip_unique_id', 'trip_first_stop_id', 'trip_last_stop_id']].drop_duplicates()
     # Reset the index after dropping rows
-    dead_trips_unique = dead_trips_unique.reset_index()
-    del query
+    dead_trips_unique = dead_trips_unique.reset_index()    
     
     #%%
     # Now get Dead TRIP route data & create table of log info

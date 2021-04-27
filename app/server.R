@@ -232,7 +232,7 @@ shinyServer(function(input, output, session) {
         'get_data',
         getDataReactive$text,
         width = 95,
-        class = NULL
+      class = NULL
       ), style = 'display: inline-block; margin-left: 10px; margin-top: 26px; vertical-align: top;'
     )
   })

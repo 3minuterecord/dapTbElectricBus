@@ -112,14 +112,14 @@ except Exception as e:
 
 dfTrimmed.to_csv("Elevations.csv")
 
-# try:
+try:
 
-#     SqlDataCursor = AzurePackage("UploadToSQL",
-#                                 dfTrimmed,
-#                                 "shapeElevations",
-#                                 in_config.teamConnQuote)
-# except pd.io.sql.DatabaseError as e:
-#     print(in_config.NoSQLShema)
-# except Exception as e:
-#     print(in_config.UNKMGO)
-#     print(e)
+    SqlDataCursor = AzurePackage("UploadToSQL",
+                                dfTrimmed,
+                                "shapeElevations",
+                                in_config.teamConnQuote)
+except pd.io.sql.DatabaseError as e:
+    print(in_config.NoSQLShema)
+except Exception as e:
+    print(in_config.UNKMGO)
+    print(e)

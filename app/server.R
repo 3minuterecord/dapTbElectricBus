@@ -21,6 +21,7 @@ shinyServer(function(input, output, session) {
   deadShapes <- reactiveValues(trips = NULL, legs = NULL) # Dead journyes
   shapeIdsReactive <- reactiveValues() # shape Ids for standard trips
   distanceData <- reactiveValues(data = NULL) # for distance plot info
+  elevationData <- reactiveValues(elevation = NULL)
   stops_reactive <- reactiveValues(stops = NULL)
   
   # Create a reactive value for the map CSS class so that its applictaion can be delayed 
@@ -175,6 +176,21 @@ shinyServer(function(input, output, session) {
     return(data)
   }
   
+  getElevationData <- function(route, service, block){
+    query <- paste0("SELECT distances.*,
+                     stopEelevations.elevation
+                     FROM distances
+                     LEFT JOIN stops ON distances.stop = stops.stop_id
+                     LEFT JOIN stopEelevations ON stops.stop_lat = stopEelevations.latitude AND
+                     stops.stop_lon = stopEelevations.longitude
+                     WHERE
+                     route_id = '", route, "' 
+                     AND service_id = '", service, 
+                     "' AND quasi_block = ", block)
+    stopElevations <- getDbData(query, conPool)
+    return(stopElevations)
+  }
+  
   # Route selector UI element
   output$showRouteSelector <- renderUI({
     div(
@@ -243,6 +259,7 @@ shinyServer(function(input, output, session) {
     deadShapes$trips <- getDeadTripShapes()
     deadShapes$legs <- getDeadLegShapes()
     distanceData$data <- getDistanceData(input$selected_route, input$selected_service, input$selected_block)
+    elevationData$data <- getElevationData(input$selected_route, input$selected_service, input$selected_block)
   })
   
   
@@ -500,29 +517,25 @@ shinyServer(function(input, output, session) {
   })
   
   output$elevationPlot <- renderPlotly({
-    if(is.null(distanceData$data)){return(NULL)}
+    if(is.null(elevationData$data)){return(NULL)}
     
-    data_plot <- distanceData$data %>%
-      # time was saved as BST hence adjusted to UTC
-      # Add the hour back now, BST is 1 hr ahead of UTC
-      # TODO --- regenerate db data with times as UTC and not BST
-      mutate(time_axis = time_axis + (1*60*60)) %>%
+    data_plot <- elevationData$data %>%
       arrange(time_axis) %>%
-      rename('distance' = distance_km)
-    
+      rename('elevation' = elevation)
     
     # Now create the plot using Plotly
     p <- plot_ly(
       data_plot, 
       x = ~time_axis, 
-      y = ~distance, 
+      y = ~elevation, 
       type = 'scatter', 
       mode = 'lines',
       height = 230, 
+      fill = 'tozeroy',
       name = 'Distance',
       line = list(color = '#1C2D38'),
       hoverinfo = 'text', 
-      text = ~paste0(round(distance, 1), " km @ ", format(time_axis, '%H:%M'))
+      text = ~paste0(elevation, " ASL @ ", format(time_axis, '%H:%M'))
     )
     
     #Add text for the total distance traveled
@@ -538,7 +551,7 @@ shinyServer(function(input, output, session) {
     # Add some final layout mods
     p <- p %>% layout(
       title = "",
-      yaxis = list(title = list(text = '<b>Distance (km)</b>',  standoff = 20L),
+      yaxis = list(title = list(text = '<b>Elevation (ASL)</b>',  standoff = 20L),
                    rangemode = "nonnegative"),
       showlegend = FALSE,
       font = list(size = 11),

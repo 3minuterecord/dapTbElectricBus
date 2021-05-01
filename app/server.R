@@ -78,6 +78,12 @@ shinyServer(function(input, output, session) {
     return(data)
   }
   
+  getStopNames <- reactive({
+    query <- "SELECT stop_id, stop_name FROM stops"
+    data <- getDbData(query, conPool)
+    return(data)
+  })
+  
   # Get shape ids for the selected block
   getShapeIds <- function (){
     trips <- stops_reactive$stops$trip_id %>% unique()
@@ -177,18 +183,28 @@ shinyServer(function(input, output, session) {
   }
   
   getElevationData <- function(route, service, block){
-    query <- paste0("SELECT distances.*,
+    # Only query the elevations table if it exists
+    query_exists <- "SELECT * FROM INFORMATION_SCHEMA.TABLES
+                     WHERE TABLE_SCHEMA = 'dbo'
+                     AND TABLE_NAME = 'elevations';"
+    checkElevations <- getDbData(query_exists, conPool)
+    
+    if(nrow(checkElevations) == 1){
+      query <- paste0("SELECT distances.*,
                      stopEelevations.elevation
                      FROM distances
                      LEFT JOIN stops ON distances.stop = stops.stop_id
                      LEFT JOIN stopEelevations ON stops.stop_lat = stopEelevations.latitude AND
                      stops.stop_lon = stopEelevations.longitude
                      WHERE
-                     route_id = '", route, "' 
-                     AND service_id = '", service, 
+                     route_id = '", route, "'
+                     AND service_id = '", service,
                      "' AND quasi_block = ", block)
-    stopElevations <- getDbData(query, conPool)
-    return(stopElevations)
+      stopElevations <- getDbData(query, conPool)
+      return(stopElevations)
+    } else {
+      return(NULL)
+    }
   }
   
   # Route selector UI element
@@ -243,6 +259,8 @@ shinyServer(function(input, output, session) {
   
   # Action button for collecting data from db for selected route, service, block 
   output$showActionButton <- renderUI({
+    if(is.null(input$selected_route) | is.null(input$selected_service) | is.null(input$selected_block)){return(NULL)}
+    if(input$selected_route == "" | input$selected_service == "" | input$selected_block ==""){return(NULL)}
     div(
       actionButton(
         'get_data',
@@ -429,6 +447,11 @@ shinyServer(function(input, output, session) {
     data <- dead_shapes_reactive$leg_stats %>%
       select(-id, -route_id, -quasi_block)
     
+    # Label stop id names
+    stop_names <- getStopNames()
+    data$start[2] <- stop_names$stop_name[stop_names$stop_id == data$start[2]] 
+    data$end[1] <- stop_names$stop_name[stop_names$stop_id == data$end[1]]  
+    
     reactable(
       data,
       filterable = FALSE,
@@ -450,8 +473,18 @@ shinyServer(function(input, output, session) {
   output$deadTripTable <- reactable::renderReactable({
     if(is.null(distanceData$data)){return(NULL)}
     if(is.null(dead_shapes_reactive$stats)){return(NULL)}
+    
+    data <- dead_shapes_reactive$stats
+    
+    # Label stop id names
+    data <- left_join(data, getStopNames(), by = c('from_stop' = 'stop_id')) %>%
+      left_join(getStopNames(), by = c('to_stop' = 'stop_id')) %>%
+      select(stop_name.x, stop_name.y, start, end, schedule_hrs, travel_hrs, distance_km) %>%
+      rename(from_stop = 'stop_name.x') %>%
+      rename(to_stop = 'stop_name.y')
+    
     reactable(
-      dead_shapes_reactive$stats,
+      data,
       filterable = FALSE,
       pagination = FALSE,
       height = 190,
@@ -681,21 +714,30 @@ shinyServer(function(input, output, session) {
     
     # Create the yaxis labels & assign factor levels so that they appear in the
     # required order
-    data$labs <- c(
+    
+    labs <- c(
       '<b>Distances < 96 km<b>', 
       '<b>Distances 96 km to 160 km<b>', 
       '<b>Distances 161 km to 300 km<b>', 
       '<b>Distances > 300 km<b>'
     )
+    data$labs <- NA
+    for (group in as.integer(data$group)){
+      data$labs[data$group == group] <- labs[group]  
+    }
     data$labs <- factor(data$labs, levels = data$labs)
     
     # Add explainer notes to add to hover info
-    data$explainer <- c(
+    explainer <- c(
       'feasible without en route charging.',
       'may require en route charging in winter',
       'will likely require some en route charging',
       'will require significant en route charging.'
     )
+    data$explainer <- NA
+    for (group in as.integer(data$group)){
+      data$explainer[data$group == group] <- explainer[group]  
+    }
     
     p <- plot_ly(
       data,
@@ -756,30 +798,29 @@ shinyServer(function(input, output, session) {
       select(group, block_length_km) %>%
       arrange(group, block_length_km)
     
-    p <- plot_ly(
-      x = subset(data, group == 1)$block_length_km, 
-      type = "histogram",
-      height = 220,
-      width = 700,
-      marker = list(color = '#70A432'),
-      name = '<b>Distances < 96 km<b>'
-    ) %>% add_histogram(
-      x = subset(data, group == 2)$block_length_km, 
-      marker = list(color = '#FFD869'),
-      name = '<b>Distances 96 km to 160 km<b>'
-    ) %>% add_histogram(
-      x = subset(data, group == 3)$block_length_km, 
-      marker = list(color = '#FFBA00'),
-      name = '<b>Distances 161 km to 300 km<b>'
-    ) %>% add_histogram(
-      x = subset(data, group == 4)$block_length_km, 
-      marker = list(color = '#D33D29'),
-      name = '<b>Distances > 300 km<b>'
-    ) %>% layout(
-      barmode = "overlay",
-      margin = list(pad = 10),
-      font = list(size = 11)
+    # bar labels
+    labs <- c(
+      '<b>Distances < 96 km<b>', 
+      '<b>Distances 96 km to 160 km<b>', 
+      '<b>Distances 161 km to 300 km<b>', 
+      '<b>Distances > 300 km<b>'
     )
+    # Colours for bars
+    cols <- c('#70A432', 'FFD869', '#FFBA00', '#D33D29')
+    
+    p <- plot_ly(type = "histogram", height = 220, width = 700,)
+    
+    # Loop through and each category
+    for (g in sort(unique(data$group))) {
+      df <- subset(data, group == g)
+      p <- p %>% add_histogram(
+        x = df$block_length_km, 
+        marker = list(color = cols[g]),
+        name = labs[g]
+      )
+    }
+    # Add final layout tweaks
+    p <- p %>% layout(barmode = "overlay", margin = list(pad = 10), font = list(size = 11))
     # Now add the title and note details
     titlesNotes_reactive$histo_plot <- paste0('Histogram of total distances (km) for ', format(nrow(networkData()), big.mark = ','), ' blocks') 
     return(p)  

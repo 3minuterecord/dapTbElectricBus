@@ -145,6 +145,8 @@ common/__pycache__
 
 temp.R
 test/
+.RData
+.Rhistory
 _pipeline/raw
 _pipeline/try.R
 _pipeline/tryTest.R

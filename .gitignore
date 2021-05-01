@@ -146,4 +146,7 @@ common/__pycache__
 temp.R
 test/
 _pipeline/raw
+_pipeline/try.R
+_pipeline/tryTest.R
+_pipeline/gtfs.zip
 

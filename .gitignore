@@ -1,9 +1,13 @@
-<<<<<<< HEAD
 # Python 
 _pipeline/__pycache__/functions.cpython-38.pyc
 
 # History files
-=======
+.Rhistory
+.Rapp.history
+dapTbElectricDublinBus.Rproj.Rhistory
+.Rapp.history
+dapTbElectricDublinBus.Rproj
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -111,8 +115,7 @@ appsettings.json
 local.settings.json
 .python_packages
 .Rproj.user
->>>>>>> integration
-.Rhistory
+
 # Ignore rsconnect for now
 rsconnect
 # Other
@@ -125,8 +128,6 @@ common/__pycache__
 
 temp.R
 test/
-.RData
-.Rhistory
 _pipeline/raw
 _pipeline/gtfs.zip
 _pipeline/try.R

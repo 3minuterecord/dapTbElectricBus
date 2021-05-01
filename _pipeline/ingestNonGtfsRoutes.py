@@ -17,7 +17,7 @@ import importlib.util
 def run_all_ingr (keys, connection, conn_string) :
 
     # Load common function file
-    spec = importlib.util.spec_from_file_location("functions", "C:/MyApps/dapTbElectricDublinBus/common/functions.py")
+    spec = importlib.util.spec_from_file_location("functions", "C:/MyApps/dapTbElectricDublinBus/_pipeline/functions.py")
     functs = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(functs)
     

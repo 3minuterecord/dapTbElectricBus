@@ -3,7 +3,7 @@ library(pool)
 
 "%+%" <- function(...) paste0(...)
 
-DB_PASSWORD_FILE_NAME <- "password.json"
+DB_PASSWORD_FILE_NAME <- "keys.json"
 
 # read config from local config file 
 passwordDb_config <- fromJSON(file = DB_PASSWORD_FILE_NAME) # SQL database connection on
@@ -60,7 +60,7 @@ getDbPool <- function(dbName = NA, serverName = NA) {
   if (is.na(serverName)) {
     serverName <- DEFAULT_SERVER
   }
-  return(pool::dbPool(odbc::odbc(), .connection_string = formConnectionString(dbName, serverName, USERNAME, passwordDb_config$password)))
+  return(pool::dbPool(odbc::odbc(), .connection_string = formConnectionString(dbName, serverName, USERNAME, passwordDb_config$sqldb_pwd)))
 }
 
 getDbData <- function (query, connection_pool){
@@ -72,15 +72,18 @@ getDbData <- function (query, connection_pool){
 
 saveByChunk <- function(chunk_size, dat, table_name, connection_pool, replace = TRUE) {
   con <- pool::poolCheckout(connection_pool)
+  #con <- connection_pool
   # Save data in chunks so that progress can be tracked
   # Split the data frame into chunks of chunk size or less
   chunkList <- split(dat, (seq(nrow(dat)) - 1) %/% chunk_size)
   # Now write each data chunk to the database 
   for (i in 1:length(chunkList)){
     print(paste0("Processing Batch ", i, " of ", length(chunkList)))
+    data <- chunkList[[i]]
+    names(data) <- gsub('ï..', '', names(data))
     if (i == 1 & replace == TRUE){
       print('Creating & writing to database table...')
-      write <- DBI::dbWriteTable(con, name = table_name, value = chunkList[[i]], overwrite = TRUE, row.names = FALSE)  
+      write <- DBI::dbWriteTable(con, name = table_name, value = data, overwrite = TRUE, row.names = FALSE)  
       if(write){
         print('Successful data write...')
       } else {
@@ -88,7 +91,7 @@ saveByChunk <- function(chunk_size, dat, table_name, connection_pool, replace = 
       }
     } else {
       print('Appending data to database table...')
-      write <- DBI::dbWriteTable(con, name = table_name, value = chunkList[[i]], append = TRUE, row.names = FALSE) 
+      write <- DBI::dbWriteTable(con, name = table_name, value = data, append = TRUE, row.names = FALSE) 
       if(write){
         print('Successful data write...')
       } else {

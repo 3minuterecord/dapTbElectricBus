@@ -27,7 +27,6 @@ class stop:
     self.end_stop_lat = end_stop_lat
     self.end_stop_lon = end_stop_lon
 
-
 # Create a function to load keys file
 def load_keys (filepath) :    
     try:
@@ -251,8 +250,15 @@ def getRouteInfo (trip_vec, start_vec, end_vec, api_url, dead_loc, collection, c
     return(dead_route_log_df)
 
 # Create a simple function for adding an index to an SQL DB
-def createIndex (col, table, curs) :
-    query_string = 'CREATE INDEX idx_{0} ON {1} ({0})'.format(col, table)  
-    curs.execute(query_string)
+def createIndex (col, table, connection, curs) :
+    query = "SELECT * FROM sys.indexes WHERE name='idx_{}' AND object_id = OBJECT_ID('dbo.{}')".format(col, table)
+    check_extg = pd.read_sql_query(query, connection) 
+    len_check = len(check_extg.index)
+    if len_check == 0 :
+        print('Create new index...')
+        query_string = 'CREATE INDEX idx_{0} ON {1} ({0})'.format(col, table)  
+        curs.execute(query_string)
+    else :
+        print('Index aleady exists, nothing to be done...')
 
         

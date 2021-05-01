@@ -4,13 +4,8 @@
 # Fetch command line arguments
 myArgs <- commandArgs(trailingOnly = TRUE)
 
-# Extract args
-# - Define the root folder where the repo has been downloaded to
-# - Use test or prod database
-root_folder <- as.character(myArgs[1]) # 'C:/MyApps'
-db_env <- myArgs[3] # test or prod
-
-# Set the working directory
+# Define the root folder where the repo has been downloaded to
+root_folder <-'C:/MyApps'#  as.character(myArgs[1])
 setwd(paste0(root_folder, '/dapTbElectricDublinBus/_pipeline'))
 
 # Load common functions & libraries
@@ -23,7 +18,7 @@ library(dplyr)
 # TODO --- Wrap in tryCatch
 KEYS_FILE_NAME <- 'keys.json'
 CONS_FILE_NAME <- 'connection_names.json'
-DATABASE <- paste0(fromJSON(file = CONS_FILE_NAME)$sql_database, db_env)
+DATABASE <- fromJSON(file = CONS_FILE_NAME)$sql_database
 DEFAULT_SERVER <- gsub('tcp:', '', fromJSON(file = CONS_FILE_NAME)$sql_server)
 PORT <- fromJSON(file = CONS_FILE_NAME)$sql_port
 USERNAME <- fromJSON(file = CONS_FILE_NAME)$sql_user
@@ -46,7 +41,8 @@ createBlockSummary <- function(root) {
       # - extractTransformLoadroutes.py
       
       # Data frame of all routes that have trips with details
-      routesVector <- getDbData("SELECT DISTINCT route_id FROM blocks", conPool)$route_id
+      routesDf <- getDbData("SELECT DISTINCT route_id FROM bus_routes", conPool)
+      routesVector <- routesDf$route_id
       
       # Get bus depot coordinates
       depots <- getDbData("SELECT * FROM depots", conPool)
@@ -67,7 +63,7 @@ createBlockSummary <- function(root) {
       # is done here and output is saved to the Azure SQL db linked ot the app
       
       ind = 0
-      slice_length = 20
+      slice_length = 30
       slice <- c(1, slice_length)
       data_summary <- data.frame()
       repeat{
@@ -82,35 +78,53 @@ createBlockSummary <- function(root) {
         routesVectorSlice <- routesVector[slice[1]:slice[2]]
         data_plot <- data.frame()
         for (route in routesVectorSlice){
-          print(paste0('Route ', which(routesVector %in% route), ' of ', length(routesVector), " (", route, ")"))
-          serviceData <- getDbData(paste0("SELECT DISTINCT service_id FROM blocks WHERE route_id = '", route, "'"), conPool)
+          print(paste0('Route ', which(routesVector %in% route), ' of ', length(routesVector)))
+          # Trips
+          tripsData <- getDbData(paste0("SELECT trip_id, service_id FROM trips WHERE route_id = '", route, "'"), conPool)
           # Loop through for each service id
-          serviceVector <- serviceData$service_id
+          serviceVector <- unique(tripsData$service_id)
           for (service in serviceVector){
             print(paste0('Service ', which(serviceVector %in% service), ' of ', length(serviceVector)))
-            # Blocks
-            query <- paste0("SELECT DISTINCT quasi_block FROM blocks 
-                                  WHERE route_id = '", route, "' AND service_id = '", service, "'")
-            blockData <- getDbData(query, conPool) %>% arrange(quasi_block)
+            # Stops
+            query <- paste0("SELECT t.route_id, t.trip_id, t.service_id, s.arrival_time, s.departure_time,
+            s.stop_id, s.stop_headsign, s.shape_dist_traveled, t.direction_id
+            FROM trips t LEFT JOIN stop_times s ON t.trip_id = s.trip_id WHERE t.trip_id IN (",
+            paste0(sprintf("'%s'", unique(tripsData$trip_id)), collapse = ', '), ") AND t.service_id = '", service, "'")
+            stops <- getDbData(query, conPool) %>% arrange(trip_id)
             
-            blockVector <- blockData$quasi_block
+            if(nrow(stops) != 0){
+              # Ensure that trips are ordered correctly wrt to time
+              # some can be reversed, use run length encoding with rep function
+              run <- rle(stops$trip_id)
+              stops$trip_id_iter <- rep(sequence(length(run$values)), run$lengths)
+              stops <- stops %>%
+                mutate(departure_secs = toSeconds(departure_time)) %>%
+                arrange(trip_id_iter, departure_secs)
+              
+              # Create quasi block number data based on departure time diffs
+              stops$quasi_block <- c(0, diff(toSeconds(stops$departure_time)))
+              # If diff is negative, it is not possible for the same bus to complete
+              # the trip, hence block assumed to terminate
+              stops$quasi_block <- ifelse(stops$quasi_block < 0, 1, 0)
+              bounds <- length(stops$quasi_block[stops$quasi_block == 1])
+              stops$quasi_block[stops$quasi_block == 1] <- (2:(bounds + 1))
+              stops$quasi_block[1] <- 1
+              # Now that block bounds have been identified, NA the infill values so
+              # that we can use the na last obs carry forward function to fill with
+              # the appropriate block number
+              stops$quasi_block <- ifelse(stops$quasi_block == 0, NA, stops$quasi_block)
+              stops$quasi_block <- zoo::na.locf(stops$quasi_block)
+            }
+            blockVector <- sort(unique(stops$quasi_block))
             for (block in blockVector){
               print(paste0('Block ', which(blockVector %in% block), ' of ', length(blockVector)))
               # Blocks
-              query <- paste0("SELECT * FROM blocks WHERE route_id = '", route, 
-                              "' AND service_id = '", service, "' AND quasi_block = '", block, "'")
-              blocks <- getDbData(query, conPool) %>% arrange(trip_id_order)
-              
-              query <- paste0("SELECT t.route_id, t.trip_id, t.service_id, s.arrival_time, s.departure_time,
-              s.stop_id, s.stop_headsign, s.shape_dist_traveled, t.direction_id
-              FROM trips t LEFT JOIN stop_times s ON t.trip_id = s.trip_id WHERE t.trip_id IN (",
-              paste0(sprintf("'%s'", blocks$trip_id), collapse = ', '), ") AND t.service_id = '", service, "'")
-              data <- getDbData(query, conPool) %>% arrange(trip_id)
+              data <- stops %>% filter(quasi_block == block)
               
               # Prep data for time and distance modifications
               # Some times could be greater than 24 hrs, e.g., 25:10:30
               # Only times are provided, but days are required for (easier) plotting
-              # We need to add dead leg & trip distances to route distances & re-calc cumulative d,istance
+              # We need to add dead leg & trip distances to route distances & re-calc cumulative distance
               data <- data %>%
                 mutate(time_secs = toSeconds(departure_time)) %>%
                 mutate(distance = shape_dist_traveled) %>%
@@ -170,6 +184,7 @@ createBlockSummary <- function(root) {
         
               # Get dead trip details for selected route, service & block
               deads <- stop_analysis %>%
+                filter(quasi_block == block) %>%
                 mutate(dead_trip_id = as.integer(dead_trip_id)) %>%
                 mutate(dead_trip_unique_id = as.integer(dead_trip_unique_id))
               

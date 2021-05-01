@@ -183,18 +183,28 @@ shinyServer(function(input, output, session) {
   }
   
   getElevationData <- function(route, service, block){
-    query <- paste0("SELECT distances.*,
+    # Only query the elevations table if it exists
+    query_exists <- "SELECT * FROM INFORMATION_SCHEMA.TABLES
+                     WHERE TABLE_SCHEMA = 'dbo'
+                     AND TABLE_NAME = 'elevations';"
+    checkElevations <- getDbData(query_exists, conPool)
+    
+    if(nrow(checkElevations) == 1){
+      query <- paste0("SELECT distances.*,
                      stopEelevations.elevation
                      FROM distances
                      LEFT JOIN stops ON distances.stop = stops.stop_id
                      LEFT JOIN stopEelevations ON stops.stop_lat = stopEelevations.latitude AND
                      stops.stop_lon = stopEelevations.longitude
                      WHERE
-                     route_id = '", route, "' 
-                     AND service_id = '", service, 
+                     route_id = '", route, "'
+                     AND service_id = '", service,
                      "' AND quasi_block = ", block)
-    stopElevations <- getDbData(query, conPool)
-    return(stopElevations)
+      stopElevations <- getDbData(query, conPool)
+      return(stopElevations)
+    } else {
+      return(NULL)
+    }
   }
   
   # Route selector UI element
@@ -704,21 +714,30 @@ shinyServer(function(input, output, session) {
     
     # Create the yaxis labels & assign factor levels so that they appear in the
     # required order
-    data$labs <- c(
+    
+    labs <- c(
       '<b>Distances < 96 km<b>', 
       '<b>Distances 96 km to 160 km<b>', 
       '<b>Distances 161 km to 300 km<b>', 
       '<b>Distances > 300 km<b>'
     )
+    data$labs <- NA
+    for (group in as.integer(data$group)){
+      data$labs[data$group == group] <- labs[group]  
+    }
     data$labs <- factor(data$labs, levels = data$labs)
     
     # Add explainer notes to add to hover info
-    data$explainer <- c(
+    explainer <- c(
       'feasible without en route charging.',
       'may require en route charging in winter',
       'will likely require some en route charging',
       'will require significant en route charging.'
     )
+    data$explainer <- NA
+    for (group in as.integer(data$group)){
+      data$explainer[data$group == group] <- explainer[group]  
+    }
     
     p <- plot_ly(
       data,
@@ -779,30 +798,29 @@ shinyServer(function(input, output, session) {
       select(group, block_length_km) %>%
       arrange(group, block_length_km)
     
-    p <- plot_ly(
-      x = subset(data, group == 1)$block_length_km, 
-      type = "histogram",
-      height = 220,
-      width = 700,
-      marker = list(color = '#70A432'),
-      name = '<b>Distances < 96 km<b>'
-    ) %>% add_histogram(
-      x = subset(data, group == 2)$block_length_km, 
-      marker = list(color = '#FFD869'),
-      name = '<b>Distances 96 km to 160 km<b>'
-    ) %>% add_histogram(
-      x = subset(data, group == 3)$block_length_km, 
-      marker = list(color = '#FFBA00'),
-      name = '<b>Distances 161 km to 300 km<b>'
-    ) %>% add_histogram(
-      x = subset(data, group == 4)$block_length_km, 
-      marker = list(color = '#D33D29'),
-      name = '<b>Distances > 300 km<b>'
-    ) %>% layout(
-      barmode = "overlay",
-      margin = list(pad = 10),
-      font = list(size = 11)
+    # bar labels
+    labs <- c(
+      '<b>Distances < 96 km<b>', 
+      '<b>Distances 96 km to 160 km<b>', 
+      '<b>Distances 161 km to 300 km<b>', 
+      '<b>Distances > 300 km<b>'
     )
+    # Colours for bars
+    cols <- c('#70A432', 'FFD869', '#FFBA00', '#D33D29')
+    
+    p <- plot_ly(type = "histogram", height = 220, width = 700,)
+    
+    # Loop through and each category
+    for (g in sort(unique(data$group))) {
+      df <- subset(data, group == g)
+      p <- p %>% add_histogram(
+        x = df$block_length_km, 
+        marker = list(color = cols[g]),
+        name = labs[g]
+      )
+    }
+    # Add final layout tweaks
+    p <- p %>% layout(barmode = "overlay", margin = list(pad = 10), font = list(size = 11))
     # Now add the title and note details
     titlesNotes_reactive$histo_plot <- paste0('Histogram of total distances (km) for ', format(nrow(networkData()), big.mark = ','), ' blocks') 
     return(p)  

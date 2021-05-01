@@ -133,6 +133,11 @@ else :
     functs.createIndex(col = 'route_id', table = 'distances', connection = conn,  curs = conn.cursor())
     functs.createIndex(col = 'service_id', table = 'distances', connection = conn,  curs = conn.cursor())
     functs.createIndex(col = 'quasi_block', table = 'distances', connection = conn,  curs = conn.cursor())
+
+    # STEP 6 - COLLECT ELEVATION DATA
+    # ====================================
+    # Build & run subprocess command
+    # WARNING --- This processing script takes sevral hours to run (if n not specificed).
     
 finally :
     # return to root directory

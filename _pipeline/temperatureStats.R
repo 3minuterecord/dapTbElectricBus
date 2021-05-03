@@ -88,11 +88,11 @@ for (week in sequence(53)){
       week = select_week,
       hr = select_hr,
       min_degC = min(sample_temp),
-      min_degC_cl = round(sample_temp_rep_lo, 2),
+      #min_degC_cl = round(sample_temp_rep_lo, 2),
       ci_lower_degC = round(CI_lower, 2),
       mean_degC = round(sample_mean, 2),
       ci_upper_degC = round(CI_upper, 2),
-      max_degC_cl = round(sample_temp_rep_hi, 2),
+      #max_degC_cl = round(sample_temp_rep_hi, 2),
       max_degC = max(sample_temp)
     )
     temperature_stats <- rbind(temperature_stats, temperature_stats_add)

@@ -859,7 +859,7 @@ shinyServer(function(input, output, session) {
         showticklabels = F, 
         showline = F,
         showgrid = F,
-        range = c(0, min((max(data$per) + 40), 110))
+        range = c(0, min((max(data$pers) + 40), 110))
       ),
       yaxis = list(title = list(test = "")),
       font = list(size = 11),

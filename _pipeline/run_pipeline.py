@@ -87,29 +87,17 @@ else :
     # STEP 3 - GET RAW ROUTE INFO FOR DEAD LEGS & DEAD TRIPS
     # ======================================================
     import ingestNonGtfsRoutes
-    
-    def service_func_ingr():
-        print('Step 3: Ingest non-GTFS route data & save to Cosmos DB')
-    
-    if __name__ == '__main__':
-        # if this scipt is executed as script, run:
-        service_func_ingr()
-        ingestNonGtfsRoutes.run_all_ingr(
+    print('Step 3: Ingest non-GTFS route data & save to Cosmos DB')
+    ingestNonGtfsRoutes.run_all_ingr(
             keys = access_keys, 
             conn_string = connection_string, 
             connection = conn)
     
     # STEP 4 - EXTRACT RAW ROUTE DATA & TRANSFORM
-    # ======================================================
+    # ===========================================
     import extractTransformLoadRoutes
-    
-    def service_func_etlr():
-        print('Step 4: Extract & transfrom non-GTFS data, save to SQL DB')
-    
-    if __name__ == '__main__':
-        # if this scipt is executed as script, run:
-        service_func_etlr()
-        extractTransformLoadRoutes.run_all_etlr(
+    print('Step 4: Extract & transfrom non-GTFS data, save to SQL DB')
+    extractTransformLoadRoutes.run_all_etlr(
             keys = access_keys, 
             conn_string = connection_string,
             connection = conn)  
@@ -122,7 +110,7 @@ else :
     # STEP 5 - CREATE NETWORK SUMMARY INFO
     # ====================================
     # Build & run subprocess command
-    # WARNING --- This processing script takes sevral hours to run (if n not specificed).
+    # WARNING --- This processing script takes several hours to run (if n not specificed).
     print('Step 5: Create network summary & save to SQL DB')
     script ='createBlockSummary.R'
     cmd = [rscript_command, pipeline_dir + script] + root_folder + n + env # Args
@@ -139,12 +127,13 @@ else :
     # Collect all elevations for each coordinate in the stops schema
     # Upload collected elevations to the stopEelevations schema
     import CollectStopElevations
+    print('Step 6: Gather elevations as part of Step 6...')
     CollectStopElevations.collectStopElevations()
     
-    # STEP 6 - CREATE NETWORK SUMMARY INFO
-    # ====================================
+    # STEP 7 - CREATE TEMPERATURE STATS
+    # =================================
     # Build & run subprocess command    
-    print('Step 6: Create temperature stats & save to SQL DB')
+    print('Step 7: Create temperature stats & save to SQL DB')
     script ='temperatureStats.R'
     cmd = [rscript_command, pipeline_dir + script] + root_folder + n + env # Args
     subprocess.check_output(cmd, universal_newlines = True)

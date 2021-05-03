@@ -110,7 +110,7 @@ ingestGtfs <- function(root, feed = 'project') {
           chunk_size = 5000, 
           dat = dat, 
           table_name = table_name, 
-          connection_pool = conPool, 
+          con = conPool, 
           replace = TRUE
         )
       }
@@ -128,7 +128,7 @@ ingestGtfs <- function(root, feed = 'project') {
         chunk_size = 5000, 
         dat = depots, 
         table_name = 'depots', 
-        connection_pool = conPool, 
+        con = conPool, 
         replace = TRUE
       )
       'Complete'

@@ -324,7 +324,7 @@ createBlockInfo <- function(root, route_extent) {
         chunk_size = 5000, 
         dat = stop_analysis_out, 
         table_name = 'stop_analysis', 
-        connection_pool = conPool,
+        con = conPool,
         replace = TRUE
       )
       
@@ -336,7 +336,7 @@ createBlockInfo <- function(root, route_extent) {
         chunk_size = 5000, 
         dat = blocks, 
         table_name = 'blocks', 
-        connection_pool = conPool,
+        con = conPool,
         replace = TRUE
       )
       
@@ -347,7 +347,7 @@ createBlockInfo <- function(root, route_extent) {
         chunk_size = 5000, 
         dat = dead_legs_out_mod, 
         table_name = 'dead_leg_summary', 
-        connection_pool = conPool,
+        con = conPool,
         replace = TRUE
       )
       'Complete'

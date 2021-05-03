@@ -6,9 +6,9 @@ import urllib
 import urllib.request
 
 try:
-    import pypackages.data.config as in_config
-    from pypackages.Azure import Azure
-    from pypackages.urlHandler import UrlHandler
+    import _pipeline.pypackages.data.config as in_config
+    from _pipeline.pypackages.Azure import Azure
+    from _pipeline.pypackages.urlHandler import UrlHandler
     AzurePackage = Azure(in_config)
     Url = UrlHandler(in_config)
     

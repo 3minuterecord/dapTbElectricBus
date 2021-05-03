@@ -64,15 +64,11 @@ getDbPool <- function(dbName = NA, serverName = NA) {
 }
 
 getDbData <- function (query, connection_pool){
-  con <- pool::poolCheckout(connection_pool)
-  data <- DBI::dbGetQuery(con, query)
-  poolReturn(con)
+  data <- DBI::dbGetQuery(connection_pool, query)
   return(data)
 }
 
-saveByChunk <- function(chunk_size, dat, table_name, connection_pool, replace = TRUE) {
-  con <- pool::poolCheckout(connection_pool)
-  #con <- connection_pool
+saveByChunk <- function(chunk_size, dat, table_name, con, replace = TRUE) {
   # Save data in chunks so that progress can be tracked
   # Split the data frame into chunks of chunk size or less
   chunkList <- split(dat, (seq(nrow(dat)) - 1) %/% chunk_size)
@@ -99,14 +95,11 @@ saveByChunk <- function(chunk_size, dat, table_name, connection_pool, replace = 
       }
     }
   }
-  poolReturn(con)
 }
 
 getStopName <- function(stop_id, connection_pool){
-  con <- poolCheckout(connection_pool)
   query <- paste0("SELECT stop_name from stops WHERE stop_id = '", stop_id, "'")
-  stop_name <- DBI::dbGetQuery(con, query)$stop_name[1]
-  pool::poolReturn(con)
+  stop_name <- DBI::dbGetQuery(connection_pool, query)$stop_name[1]
   rm(query)
   return(stop_name)
 }

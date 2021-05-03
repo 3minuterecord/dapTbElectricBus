@@ -56,7 +56,7 @@ ingestGtfs <- function(root, feed = 'project') {
       
       # Download the data as a zip file
       zip_file_Location <- paste0(root, '/dapTbElectricDublinBus/_pipeline/gtfs.zip')
-      #download.file(url = file, destfile = zip_file_Location, mode = 'wb')
+      download.file(url = file, destfile = zip_file_Location, mode = 'wb')
       
       # Unzip the data to a raw folder
       # This will create a series of txt files for each GTFS 'table'
@@ -103,14 +103,14 @@ ingestGtfs <- function(root, feed = 'project') {
         print(head(dat))
         # Seems to be an issue creating a table with the name 'routes'
         if (table_name == 'routes') {table_name <- 'bus_routes'}
-        if (table_name == 'stop_times') next
-        if (table_name == 'shapes') next
+        #if (table_name == 'stop_times') next
+        #if (table_name == 'shapes') next
         # Now save in row chunks to SQL DB
         saveByChunk(
           chunk_size = 5000, 
           dat = dat, 
           table_name = table_name, 
-          connection_pool = conPool, 
+          con = conPool, 
           replace = TRUE
         )
       }
@@ -128,7 +128,7 @@ ingestGtfs <- function(root, feed = 'project') {
         chunk_size = 5000, 
         dat = depots, 
         table_name = 'depots', 
-        connection_pool = conPool, 
+        con = conPool, 
         replace = TRUE
       )
       'Complete'

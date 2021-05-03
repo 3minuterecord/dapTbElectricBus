@@ -46,7 +46,7 @@ createBlockSummary <- function(root) {
       # - extractTransformLoadroutes.py
       
       # Data frame of all routes that have trips with details
-      routesVector <- getDbData("SELECT DISTINCT route_id FROM blocks", conPool)$route_id
+      routesVector <- sort(getDbData("SELECT DISTINCT route_id FROM blocks", conPool)$route_id)
       
       # Get bus depot coordinates
       depots <- getDbData("SELECT * FROM depots", conPool)
@@ -67,9 +67,11 @@ createBlockSummary <- function(root) {
       # is done here and output is saved to the Azure SQL db linked ot the app
       
       ind = 0
-      slice_length = 20
-      slice <- c(1, slice_length)
+      slice_length = 30
+      slice_start = 1
+      slice <- c(slice_start, (slice_length + (slice_start - slice_start)))
       data_summary <- data.frame()
+      warning_log <- data.frame()
       repeat{
         if (slice[2] == length(routesVector)) {break}
         if (ind != 0) {
@@ -99,12 +101,12 @@ createBlockSummary <- function(root) {
               # Blocks
               query <- paste0("SELECT * FROM blocks WHERE route_id = '", route, 
                               "' AND service_id = '", service, "' AND quasi_block = '", block, "'")
-              blocks <- getDbData(query, conPool) %>% arrange(trip_id_order)
+              block_trips <- getDbData(query, conPool) %>% arrange(trip_id_order)
               
               query <- paste0("SELECT t.route_id, t.trip_id, t.service_id, s.arrival_time, s.departure_time,
               s.stop_id, s.stop_headsign, s.shape_dist_traveled, t.direction_id
               FROM trips t LEFT JOIN stop_times s ON t.trip_id = s.trip_id WHERE t.trip_id IN (",
-              paste0(sprintf("'%s'", blocks$trip_id), collapse = ', '), ") AND t.service_id = '", service, "'")
+              paste0(sprintf("'%s'", block_trips$trip_id), collapse = ', '), ") AND t.service_id = '", service, "'")
               data <- getDbData(query, conPool) %>% arrange(trip_id)
               
               # Prep data for time and distance modifications
@@ -125,10 +127,12 @@ createBlockSummary <- function(root) {
               if (sum(high_times_loc) != 0){
                 high_times <- data$departure_time[high_times_loc]
                 high_times_hrs <- as.integer(substr(high_times, 1, 2))
-                day_count <- ceiling(max(high_times_hrs)) # round up to nearest day
+                day_count <- ceiling(max(high_times_hrs) / 24) # round up to nearest day
                 # Iterate & add day flags
                 for (days in sequence(day_count)){
-                  data$day_flag[data$time_secs > (days * 24 * 60 * 60)] <- (days + 1) # change flag for days greater than days x 24 hrs
+                  # change flag for days greater than or equal to days x 24 hrs
+                  # 24:00:00 needs to change to next day also
+                  data$day_flag[data$time_secs >= (days * 24 * 60 * 60)] <- (days + 1) 
                 }
               }
               
@@ -191,8 +195,20 @@ createBlockSummary <- function(root) {
                   select(-dead_start_secs)
                 
                 # Now we need to add in the dead trip distances to our distance data
+                # Match on arrival time and stop id as somes stops will have zero time
+                # between stop and start
                 # Add 1 to indices as distance traveled is at available at the end of the trip
-                inds <- which(data$arrival_time %in% dead_routes_stats$dead_start) + 1
+                inds <- which(data$arrival_time %in% dead_routes_stats$dead_start & 
+                                data$stop_id %in% dead_routes_stats$trip_first_stop_id) + 1
+                if(length(inds) != length(dead_routes_stats$distance_km)){
+                  print(paste0('Indexed vs available dead trips is ', length(inds), ":", length(dead_routes_stats$distance_km)))
+                  warning_log_add <- data.frame(
+                    logged_route = route,
+                    logged_service = service,
+                    logged_block = block
+                  )
+                  warning_log <- rbind(warning_log, warning_log_add)
+                } 
                 data$distance[inds] <- (dead_routes_stats$distance_km * 1000) # Convert from km to m for consistency
                 # Warning messages:
                 # 1: In data$distance[inds] <- (dead_routes_stats$distance_km * 1000) :
@@ -285,6 +301,9 @@ createBlockSummary <- function(root) {
               data_plot <- rbind(data_plot, data_plot_add)
               data_summary <- rbind(data_summary, data_summary_add)
             }
+            rm(data, block_trips, stop_analysis, deads, legs_df, data_plot_add, 
+               data_summary_add, distance_vec, time_vec, dead_leg_shapes, dead_legs, 
+               trips_made)
           }
         }
         mode <- ifelse(ind == 0, TRUE, FALSE)
@@ -297,7 +316,7 @@ createBlockSummary <- function(root) {
           chunk_size = 5000,
           dat = data_plot,
           table_name = 'distances',
-          connection_pool = conPool,
+          con = conPool,
           replace = mode
         )
         if(ind == 0) ind <- ind + 1
@@ -312,7 +331,7 @@ createBlockSummary <- function(root) {
         chunk_size = 5000, 
         dat = data_summary, 
         table_name = 'block_summary', 
-        connection_pool = conPool,
+        con = conPool,
         replace = TRUE
       )
       'Complete'

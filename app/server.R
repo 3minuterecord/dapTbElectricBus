@@ -207,6 +207,13 @@ shinyServer(function(input, output, session) {
     }
   }
   
+  temperatureData <- reactive({
+    week <- lubridate::isoweek(input$week_selector)
+    query <- paste0("SELECT * FROM temperature_stats WHERE week = ", week)
+    data <- getDbData(query, conPool) %>% arrange(hr)
+    return(data)
+  })
+  
   # Route selector UI element
   output$showRouteSelector <- renderUI({
     div(
@@ -408,7 +415,25 @@ shinyServer(function(input, output, session) {
   output$showRoutePlots <- renderUI({
     div(
       div(plotlyOutput('distancePlot', height = 200), style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;'),
-      div(plotlyOutput('elevationPlot', height = 200), style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;')
+      div(plotlyOutput('elevationPlot', height = 200), style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;'),
+      div(uiOutput('week_slider')),
+      div(plotlyOutput('temperaturePlot', height = 200), 
+      style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;')
+    )
+  })
+  
+  output$week_slider <- renderUI({
+    if(is.null(distanceData$data)){return(NULL)}
+    div(
+      #  min = as.Date("2021-01-01"),max =as.Date("2021-12-31"),value = as.Date("2021-06-01"), timeFormat = "%b %d"
+      sliderInput(
+        'week_selector',
+        'Week',
+        min = as.Date("2021-01-01"), 
+        max = as.Date("2021-12-31"), 
+        value = as.Date("2021-06-01"), 
+        timeFormat = "%d-%b"
+      ), style = 'margin-left: 55px; margin-right: 50px;'
     )
   })
   
@@ -593,6 +618,76 @@ shinyServer(function(input, output, session) {
       xaxis = list(
         title = '',
         range = c((min(data_plot$time_axis)- (1*60*60)), max(data_plot$time_axis) + (2*60*60)),
+        type = 'date',
+        tickformat = "%H:%M",
+        margin = list(pad = 5)
+      )
+    )
+  })
+  
+  # Create a line chart of temperatures for the route block
+  output$temperaturePlot <- renderPlotly({
+    if(is.null(distanceData$data)){return(NULL)}
+    req(input$week_selector)
+    
+    distance_times <- c(min((distanceData$data$time_axis)- (1*60*60)), max((distanceData$data$time_axis) + (2*60*60)))
+    
+    data_plot <- temperatureData() %>%
+      mutate(hr = sprintf("%02d", as.numeric(hr))) %>%
+      mutate(time_axis = as.POSIXct(
+        paste0('2021-01-0', '1', ' ', hr, ':00:00'), 
+        format = "%Y-%m-%d %H:%M:%S", tz = 'UTC'
+      ))
+    
+    data_plot_add <- data_plot %>%
+      mutate(hr = sprintf("%02d", as.numeric(hr))) %>%
+      mutate(time_axis = as.POSIXct(
+        paste0('2021-01-0', '2', ' ', hr, ':00:00'), 
+        format = "%Y-%m-%d %H:%M:%S", tz = 'UTC'
+      ))
+    
+    data_plot <- rbind(data_plot, data_plot_add)
+     
+    # Now create the plot using Plotly
+    p <- plot_ly(
+      data_plot, 
+      x = ~time_axis, 
+      y = ~ci_upper_degC, 
+      type = 'scatter', 
+      mode = 'lines',
+      height = 230, 
+      name = 'Temperature High',
+      line = list(color = 'transparent')
+    )
+    
+    p <- p %>% add_trace(
+      y = ~ci_lower_degC, 
+      type = 'scatter', 
+      mode = 'lines',
+      name = 'Temperature Low',
+      line = list(color = 'transparent'),
+      fill = 'tonexty', 
+      fillcolor = '#C1C1C1' 
+    )
+    
+    p <- p %>% add_trace(
+      y = ~mean_degC, 
+      type = 'scatter', 
+      mode = 'lines',
+      name = 'Temperature Mean',
+      line = list(color = '#1C2D38')
+    )
+    
+    # Add some final layout mods
+    p <- p %>% layout(
+      title = "",
+      yaxis = list(title = list(text = '<b>Temperature (deg C)</b>',  standoff = 20L),
+                   range = ~c(min(0, min(ci_lower_degC)), max(ci_upper_degC) + 2)),
+      showlegend = FALSE,
+      font = list(size = 11),
+      xaxis = list(
+        title = '',
+        range = c(distance_times[1], distance_times[2]),
         type = 'date',
         tickformat = "%H:%M",
         margin = list(pad = 5)

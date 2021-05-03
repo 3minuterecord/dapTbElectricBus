@@ -6,14 +6,19 @@ import importlib.util
 # ARGUMENTS
 # =========
 # First define arguments to be passed to the other scripts
-root_folder = ['C:/MyApps'] # Only change if youclone he repo to a different location
-n = ['30'] # The number of routes to process, select 276 for all routes (for Dublin 6th April) 
+root_folder = ['C:/MyApps'] # Only change if you clone he repo to a different location
+n = ['30'] # The number of routes to process, use 196 for all routes (for Dublin 6th April) 
 # but this could take several hrs to run. 
 env = ['test'] # 'test' or 'prod' - Determines which SQL DB to interact with
+
+# Define Local Rscript location
+# NOTE: Change to suit local configuration 
+rscript_command ='C:/Program Files/R/R-4.0.2/bin/Rscript'
 
 # Define the pipeline directory location
 folder_string = "/dapTbElectricDublinBus/_pipeline"
 path = root_folder[0] + folder_string
+pipeline_dir = path + '/'
 
 # Load common function file
 spec = importlib.util.spec_from_file_location('functions', path + '/functions.py')
@@ -35,11 +40,6 @@ connection_string = 'DRIVER={ODBC Driver 13 for SQL Server};SERVER=' + server + 
     
 # Connect to the database    
 conn = pyodbc.connect(connection_string, autocommit = True)
-
-# Specify Directories
-# ===================
-pipeline_dir = path + '/'
-rscript_command ='C:/Program Files/R/R-4.0.2/bin/Rscript'
 
 try:
     os.chdir(pipeline_dir)    

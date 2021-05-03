@@ -28,14 +28,16 @@ class UrlHandler():
             return "Object does not exist."
 
     def callURL(self, url, body, headers):
+        """Send request to URL and return response."""
         if body:
             req = urllib.request.Request(url, body, headers)
         else:
             req = urllib.request.Request(url, headers=headers)
-        response = urllib.request.urlopen(req, timeout=500000)
+        response = urllib.request.urlopen(req, timeout=2000)
         return response
         
     def generateLocationRequest(self, shapeData):
+        """Generate Json request from dataframe input for elevations."""
         listofLocations = []
         locationDict = {}
         for index,row in shapeData.iterrows():
@@ -47,7 +49,7 @@ class UrlHandler():
         return locationDict
 
     def mineElevationData(self, shapeData):
-        # data = self.generateLocationRequest(shapeData)
+        """Convert returned request into Json file type."""
         body = str.encode(json.dumps(shapeData))
         response = self.callURL(in_config.url, body, in_config.elevHeaders)
         jsonReadyData = response.read().decode('utf8').replace("'", '"')
@@ -55,6 +57,7 @@ class UrlHandler():
         return elevationData
 
     def EuclideanDist(self, alt1, alt2, lon1, lat1, lon2, lat2):
+        """Determine Euclidean distance between two coordinates and their elevations."""
         alt_1 = alt1
         alt_2 = alt2
         dalt = alt_1-alt_2

@@ -7,12 +7,12 @@ import importlib.util
 # =========
 # First define arguments to be passed to the other scripts
 root_folder = ['C:/MyApps'] # Only change if you clone he repo to a different location
-n = ['30'] # The number of routes to process, use 196 for all routes (for Dublin 6th April) 
+n = ['5'] # The number of routes to process, use 196 for all routes (for Dublin 6th April) 
 # but this could take several hrs to run. 
 env = ['test'] # 'test' or 'prod' - Determines which SQL DB to interact with
 
 # Define Local Rscript location
-# NOTE: Change to suit local configuration 
+# NOTE: Change to suit your local configuration 
 rscript_command ='C:/Program Files/R/R-4.0.2/bin/Rscript'
 
 # Define the pipeline directory location
@@ -133,6 +133,14 @@ else :
     functs.createIndex(col = 'route_id', table = 'distances', connection = conn,  curs = conn.cursor())
     functs.createIndex(col = 'service_id', table = 'distances', connection = conn,  curs = conn.cursor())
     functs.createIndex(col = 'quasi_block', table = 'distances', connection = conn,  curs = conn.cursor())
+    
+    # STEP 6 - CREATE NETWORK SUMMARY INFO
+    # ====================================
+    # Build & run subprocess command    
+    print('Step 6: Create temperature stats & save to SQL DB')
+    script ='temperatureStats.R'
+    cmd = [rscript_command, pipeline_dir + script] + root_folder + n + env # Args
+    subprocess.check_output(cmd, universal_newlines = True)
     
 finally :
     # return to root directory

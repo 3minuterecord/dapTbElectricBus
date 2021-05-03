@@ -15,7 +15,7 @@ library(rjson)
 library(viridis)
 
 # The app's database (SQL azure)
-DATABASE <- "electricbus-eastus-prod"
+DATABASE <- "electricbus-eastus-production"
 
 "%+%" <- function(...) paste0(...)
 

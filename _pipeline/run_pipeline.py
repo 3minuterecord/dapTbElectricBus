@@ -133,6 +133,13 @@ else :
     functs.createIndex(col = 'route_id', table = 'distances', connection = conn,  curs = conn.cursor())
     functs.createIndex(col = 'service_id', table = 'distances', connection = conn,  curs = conn.cursor())
     functs.createIndex(col = 'quasi_block', table = 'distances', connection = conn,  curs = conn.cursor())
+
+    # STEP 6 - COLLECT ELEVATION DATA
+    # ====================================
+    # Collect all elevations for each coordinate in the stops schema
+    # Upload collected elevations to the stopEelevations schema
+    import CollectStopElevations
+    CollectStopElevations.collectStopElevations()
     
 finally :
     # return to root directory

@@ -2,12 +2,13 @@ from sys import getsizeof as dictsize
 import time
 import urllib
 import pandas as pd
+import urllib
 import urllib.request
 
 try:
-    import createNewData.data.config as in_config
-    from createNewData.pypackages.Azure import Azure
-    from createNewData.pypackages.urlHandler import UrlHandler
+    import pypackages.data.config as in_config
+    from pypackages.Azure import Azure
+    from pypackages.urlHandler import UrlHandler
     AzurePackage = Azure(in_config)
     Url = UrlHandler(in_config)
     
@@ -17,6 +18,20 @@ except ImportError as e:
     print(e)
 
 def collectStopElevations():
+    #===========================================================================
+    # 1. Create Request Batches
+    #===========================================================================
+    # A. Collect all items in the 'stops' schema of the shared team Database.
+    # B. Reduce Dataframe by removing dupicate coordinates.
+    # C. Pop() coordinates based on batch sizes no greater than 9700 bytes.
+    # D. Add each coordinate to a list of batches to send the the Open-elevations API
+    #-----------------------------------------------------
+    # Attributes
+    #-----------------------------------------------------
+    # Azure class imported with call functionality (in)
+    # Config File (in)
+    # listOfBatches (out)
+
     listOfBatches = []
     batches = {"locations" : []}
     try:
@@ -59,6 +74,16 @@ def collectStopElevations():
         print(in_config.UNKMGO)
         print(e)
 
+    #=============================================================================================
+    # 4. Send Request Batches
+    #===========================================================================
+    # A. Send all request in the list of request batches to the API and store them into a a dataframe.
+    # B. Upload the dataframe to the database, replacing any existing schema with the same table name.
+    #-----------------------------------------------------
+    # Attributes
+    #-----------------------------------------------------
+    # Azure class imported with call functionality (in)
+    # List of request batches (in)
     listOfObjects = []
     listOfElevations = []
     ListOfDicts = []

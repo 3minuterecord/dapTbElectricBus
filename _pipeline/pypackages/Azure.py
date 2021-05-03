@@ -98,18 +98,14 @@ class Azure():
         client.close()
     
     def SQLDrop(self, tablename):
-        """Collect all the distinct shape ID's and loop through each
-           returning the elevation data from the portal.
-           Requires: column and table name"""
+        """Drop SQL schema from the specified database"""
         conn = self.AzureDBConn(self.in_config.teamConnQuote)
         SQLString = self.in_config.SQLDrop.format(tablename)
         conn.execute(SQLString)
         conn.close()
     
     def SelectDistinct(self, column, tablename):
-        """Collect all the distinct shape ID's and loop through each
-           returning the elevation data from the portal.
-           Requires: column and table name"""
+        """Select unique items in a database schema."""
         conn = self.AzureDBConn(self.in_config.teamConnQuote)
         SQLString = self.in_config.SQLDistinct.format(column, tablename)
         df = pd.read_sql(SQLString, conn)
@@ -117,26 +113,12 @@ class Azure():
         return df
     
     def SelectAllData(self, tablename):
-        """Collect all the distinct shape ID's and loop through each
-           returning the elevation data from the portal.
-           Requires: column and table name"""
+        """Return all data from a database Schema"""
         conn = self.AzureDBConn(self.in_config.teamConnQuote)
         SQLString = self.in_config.SQLSelect.format(tablename)
         df = pd.read_sql(SQLString, conn)
         conn.close()
         return df
     
-    def SelectLongLat(self, columns, tablename, columnName, shape):
-        """Collect all the data in a table that 
-           contains the shape name in 
-           the shape_id column."""
-        conn = self.AzureDBConn(self.in_config.connQuote)
-        SQLString = self.in_config.SQLStr.format(columns, 
-                                                 tablename, 
-                                                 columnName, 
-                                                 shape)
-        df = pd.read_sql(SQLString, conn)
-        conn.close()
-        return df
 
     

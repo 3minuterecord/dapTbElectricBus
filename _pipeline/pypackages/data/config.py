@@ -22,21 +22,12 @@ SQLDriver = os.environ.get("SQLDriver")
 # Secure variables for Azure Connections
 # for use on James' personal machine.
 #---------------------------------------
-# SQLPASSTEAM = os.environ.get("SQLPASSTEAM")
-# SQLUSERTEAM = os.environ.get("SQLUSERTEAM")
-# SQLDATABASETEAM = os.environ.get("SQLDATABASETEAM")
-# SQLSERVERTEAM = os.environ.get("SQLSERVERTEAM")
-# SQLDRIVERTEAM = os.environ.get("SQLDRIVERTEAM")
-
-#---------------------------------------
-# Secure variables for Azure Connections
-# for use with Team Pipline script.
-#---------------------------------------
 SQLPASSTEAM = os.environ.get("SQLPASSTEAM")
 SQLUSERTEAM = os.environ.get("SQLUSERTEAM")
 SQLDATABASETEAM = os.environ.get("SQLDATABASETEAM")
 SQLSERVERTEAM = os.environ.get("SQLSERVERTEAM")
 SQLDRIVERTEAM = os.environ.get("SQLDRIVERTEAM")
+
 
 #---------------------------------------
 # Secure variables for Azure Connections

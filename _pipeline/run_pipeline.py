@@ -136,8 +136,10 @@ else :
 
     # STEP 6 - COLLECT ELEVATION DATA
     # ====================================
-    # Build & run subprocess command
-    # WARNING --- This processing script takes sevral hours to run (if n not specificed).
+    # Collect all elevations for each coordinate in the stops schema
+    # Upload collected elevations to the stopEelevations schema
+    import CollectStopElevations
+    CollectStopElevations.collectStopElevations()
     
 finally :
     # return to root directory

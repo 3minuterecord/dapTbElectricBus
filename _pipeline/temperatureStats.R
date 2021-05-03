@@ -106,8 +106,9 @@ saveByChunk(
   chunk_size = 5000, 
   dat = temperature_stats, 
   table_name = 'temperature_stats', 
-  connection_pool = conPool,
+  con = conPool,
   replace = TRUE
 )
+
 
 

@@ -316,7 +316,7 @@ createBlockSummary <- function(root) {
           chunk_size = 5000,
           dat = data_plot,
           table_name = 'distances',
-          connection_pool = conPool,
+          con = conPool,
           replace = mode
         )
         if(ind == 0) ind <- ind + 1
@@ -331,7 +331,7 @@ createBlockSummary <- function(root) {
         chunk_size = 5000, 
         dat = data_summary, 
         table_name = 'block_summary', 
-        connection_pool = conPool,
+        con = conPool,
         replace = TRUE
       )
       'Complete'

@@ -8,7 +8,7 @@ https://orb10x.shinyapps.io/dapTbElectricBus/
 **App** (test)  
 https://orb10x.shinyapps.io/dapTbElectricBusTest/
   
-![](app/www/screen1.png)
+![](app/www/screen1.PNG)
 ![](app/www/screen2.png)
   
 #### GTFS Ingestion & Processing Steps

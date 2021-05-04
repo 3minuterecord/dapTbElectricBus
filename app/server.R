@@ -186,16 +186,16 @@ shinyServer(function(input, output, session) {
     # Only query the elevations table if it exists
     query_exists <- "SELECT * FROM INFORMATION_SCHEMA.TABLES
                      WHERE TABLE_SCHEMA = 'dbo'
-                     AND TABLE_NAME = 'elevations';"
+                     AND TABLE_NAME = 'stopElevations';"
     checkElevations <- getDbData(query_exists, conPool)
     
     if(nrow(checkElevations) == 1){
       query <- paste0("SELECT distances.*,
-                     stopEelevations.elevation
+                     stopElevations.elevation
                      FROM distances
                      LEFT JOIN stops ON distances.stop = stops.stop_id
-                     LEFT JOIN stopEelevations ON stops.stop_lat = stopEelevations.latitude AND
-                     stops.stop_lon = stopEelevations.longitude
+                     LEFT JOIN stopElevations ON stops.stop_lat = stopElevations.latitude AND
+                     stops.stop_lon = stopElevations.longitude
                      WHERE
                      route_id = '", route, "'
                      AND service_id = '", service,
@@ -417,8 +417,8 @@ shinyServer(function(input, output, session) {
       div(plotlyOutput('distancePlot', height = 200), style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;'),
       div(plotlyOutput('elevationPlot', height = 200), style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;'),
       div(uiOutput('week_slider')),
-      div(plotlyOutput('temperaturePlot', height = 200), 
-      style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;')
+      div(uiOutput('showTemperaturePlotNotes'), style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;'),
+      div(plotlyOutput('temperaturePlot', height = 200), style = 'margin-left: 40px; margin-right: 50px;  margin-top: 27px;')
     )
   })
   
@@ -428,12 +428,12 @@ shinyServer(function(input, output, session) {
       #  min = as.Date("2021-01-01"),max =as.Date("2021-12-31"),value = as.Date("2021-06-01"), timeFormat = "%b %d"
       sliderInput(
         'week_selector',
-        'Week',
+        'Date',
         min = as.Date("2021-01-01"), 
         max = as.Date("2021-12-31"), 
-        value = as.Date("2021-06-01"), 
+        value = as.Date("2021-01-01"), 
         timeFormat = "%d-%b"
-      ), style = 'margin-left: 55px; margin-right: 50px;'
+      ), style = 'margin-left: 55px; margin-right: 50px; margin-top: 20px;'
     )
   })
   
@@ -542,7 +542,7 @@ shinyServer(function(input, output, session) {
       y = ~distance, 
       type = 'scatter', 
       mode = 'lines',
-      height = 230, 
+      height = 200, 
       name = 'Distance',
       line = list(color = '#1C2D38'),
       hoverinfo = 'text', 
@@ -570,9 +570,9 @@ shinyServer(function(input, output, session) {
         title = '',
         range = c((min(data_plot$time_axis)- (1*60*60)), max(data_plot$time_axis) + (2*60*60)),
         type = 'date',
-        tickformat = "%H:%M",
-        margin = list(pad = 5)
-      )
+        tickformat = "%H:%M"
+      ),
+      margin = list(pad = 5)
     )
   })
   
@@ -590,39 +590,42 @@ shinyServer(function(input, output, session) {
       y = ~elevation, 
       type = 'scatter', 
       mode = 'lines',
-      height = 230, 
+      height = 200, 
       fill = 'tozeroy',
+      fillcolor = '#B5DA8A',
       name = 'Distance',
-      line = list(color = '#1C2D38'),
+      line = list(color = '#1C2D38', width = 1),
       hoverinfo = 'text', 
       text = ~paste0(elevation, " ASL @ ", format(time_axis, '%H:%M'))
-    )
-    
-    #Add text for the total distance traveled
-    p <- p %>% add_text(
-      x = max(data_plot$time_axis),
-      y = max(data_plot$distance),
-      mode = 'text',
-      text = paste0("<b> ", round(max(data_plot$distance), 1), 'km <b>'),
-      textposition = 'right',
-      textfont = list(color = '#000000', size = 13)
     )
     
     # Add some final layout mods
     p <- p %>% layout(
       title = "",
-      yaxis = list(title = list(text = '<b>Elevation (ASL)</b>',  standoff = 20L),
-                   rangemode = "nonnegative"),
+      yaxis = list(
+        title = list(
+          text = '<b>Elevation ASL (m)</b>',  
+          standoff = 20L
+          ),
+        range = c(0, (max(data_plot$elevation) + 40))
+        ),
       showlegend = FALSE,
       font = list(size = 11),
       xaxis = list(
         title = '',
         range = c((min(data_plot$time_axis)- (1*60*60)), max(data_plot$time_axis) + (2*60*60)),
         type = 'date',
-        tickformat = "%H:%M",
-        margin = list(pad = 5)
-      )
+        tickformat = "%H:%M"
+      ),
+      margin = list(pad = 5)
     )
+  })
+  
+  # Display chart notes, again assigned after plot is ready
+  output$showTemperaturePlotNotes <- renderUI({
+    if(is.null(titlesNotes_reactive$temperature_note)){return(NULL)}
+    notes <- titlesNotes_reactive$temperature_note
+    div(span('*', style = 'font-weight: 900; font-size: 15px;'), notes, class = 'plot-notes')
   })
   
   # Create a line chart of temperatures for the route block
@@ -655,7 +658,7 @@ shinyServer(function(input, output, session) {
       y = ~ci_upper_degC, 
       type = 'scatter', 
       mode = 'lines',
-      height = 230, 
+      height = 200, 
       name = 'Temperature High',
       line = list(color = 'transparent')
     )
@@ -689,10 +692,12 @@ shinyServer(function(input, output, session) {
         title = '',
         range = c(distance_times[1], distance_times[2]),
         type = 'date',
-        tickformat = "%H:%M",
-        margin = list(pad = 5)
-      )
+        tickformat = "%H:%M"
+      ),
+      margin = list(pad = 5)
     )
+    titlesNotes_reactive$temperature_note <- 'Grey band represents 95% confidence interval on sample mean.'  
+    return(p)
   })
   
   # Show the reactable table view of trips for selected route
@@ -778,7 +783,7 @@ shinyServer(function(input, output, session) {
   # this is used a simple way to delay the appearance of titles & notes
   # until data/charts are ready
   titlesNotes_reactive <- reactiveValues(
-    range_plot = NULL, range_note = NULL, histo_plot = NULL
+    range_plot = NULL, range_note = NULL, histo_plot = NULL, temperature_plot = NULL
   )
   
   # Display a title for the range plot
@@ -848,7 +853,7 @@ shinyServer(function(input, output, session) {
     ) %>% add_text(
       x = ~pers,
       y = ~labs,
-      mode = 'text',
+      mode = 'text+markers',
       text = ~paste0("<b> ", round(pers, 0), '% <b>'),
       textposition = 'right',
       textfont = list(color = '#000000', size = 12),

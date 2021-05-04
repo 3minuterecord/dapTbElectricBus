@@ -1,5 +1,12 @@
-# Create blocks & identify dead trips & legs
-# ==========================================
+# Create temperature stats
+# ========================
+
+# This script takes the 30-year (hourly) Dublin temperature data set and 
+# calculates summary stats for each hour of the day for each week of the year.
+# - Mean ambient temperature for each hour of each week
+# - 95% CI for this mean
+# - p90 value for the sample data
+# - sample min and max
 
 # Fetch command line arguments
 myArgs <- commandArgs(trailingOnly = TRUE)

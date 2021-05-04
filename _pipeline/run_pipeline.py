@@ -121,6 +121,7 @@ else :
     functs.createIndex(col = 'route_id', table = 'distances', connection = conn,  curs = conn.cursor())
     functs.createIndex(col = 'service_id', table = 'distances', connection = conn,  curs = conn.cursor())
     functs.createIndex(col = 'quasi_block', table = 'distances', connection = conn,  curs = conn.cursor())
+    functs.createIndex(col = 'stop', table = 'distances', connection = conn,  curs = conn.cursor())    
 
     # STEP 6 - COLLECT ELEVATION DATA
     # ====================================
@@ -129,6 +130,8 @@ else :
     import CollectStopElevations
     print('Step 6: Gather elevations as part of Step 6...')
     CollectStopElevations.collectStopElevations()
+    functs.createIndex(col = 'latitude', table = 'stopElevations', connection = conn,  curs = conn.cursor())    
+    functs.createIndex(col = 'longitude', table = 'stopElevations', connection = conn,  curs = conn.cursor())    
     
     # STEP 7 - CREATE TEMPERATURE STATS
     # =================================

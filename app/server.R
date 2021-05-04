@@ -697,7 +697,7 @@ shinyServer(function(input, output, session) {
     p <- p %>% layout(
       title = "",
       yaxis = list(title = list(text = '<b>Temperature (deg C)</b>',  standoff = 20L),
-                   range = ~c(min(0, min(ci_lower_degC, p90)), max(ci_upper_degC) + 2)),
+                   range = ~c(min(0, min(ci_lower_degC, p90_degC)), max(ci_upper_degC) + 2)),
       showlegend = FALSE,
       font = list(size = 11),
       xaxis = list(

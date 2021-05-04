@@ -7,8 +7,8 @@ myArgs <- commandArgs(trailingOnly = TRUE)
 # Extract args
 # - Define the root folder where the repo has been downloaded to
 # - Use test or prod database
-root_folder <- 'C:/MyApps' #as.character(myArgs[1]) # 'C:/MyApps'
-db_env <- 'production' #myArgs[3] # test or production
+root_folder <- as.character(myArgs[1]) # 'C:/MyApps'
+db_env <- myArgs[3] # test or production
 
 # Set the working directory
 setwd(paste0(root_folder, '/dapTbElectricDublinBus/_pipeline'))

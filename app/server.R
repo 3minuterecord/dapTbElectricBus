@@ -672,7 +672,17 @@ shinyServer(function(input, output, session) {
       name = 'Temperature Low',
       line = list(color = 'transparent'),
       fill = 'tonexty', 
-      fillcolor = '#C1C1C1' 
+      fillcolor = '#C1C1C160' 
+    )
+    
+    p <- p %>% add_trace(
+      y = ~p90_degC, 
+      type = 'scatter', 
+      mode = 'lines',
+      name = 'Temperature p90',
+      line = list(color = 'transparent'),
+      fill = 'tonexty', 
+      fillcolor = '#D43E2A60' 
     )
     
     p <- p %>% add_trace(
@@ -687,7 +697,7 @@ shinyServer(function(input, output, session) {
     p <- p %>% layout(
       title = "",
       yaxis = list(title = list(text = '<b>Temperature (deg C)</b>',  standoff = 20L),
-                   range = ~c(min(0, min(ci_lower_degC)), max(ci_upper_degC) + 2)),
+                   range = ~c(min(0, min(ci_lower_degC, p90)), max(ci_upper_degC) + 2)),
       showlegend = FALSE,
       font = list(size = 11),
       xaxis = list(
@@ -698,7 +708,9 @@ shinyServer(function(input, output, session) {
       ),
       margin = list(pad = 5)
     )
-    titlesNotes_reactive$temperature_note <- 'Grey band represents 95% confidence interval on sample mean.'  
+    titlesNotes_reactive$temperature_note <- 'Grey band represents 95% confidence 
+    interval for sample mean.  Red represents the p90 value, i.e., 90% of temperatures in
+    the 30-year sample were greater than the lower edge of this band.'  
     return(p)
   })
   

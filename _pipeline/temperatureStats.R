@@ -7,8 +7,8 @@ myArgs <- commandArgs(trailingOnly = TRUE)
 # Extract args
 # - Define the root folder where the repo has been downloaded to
 # - Use test or prod database
-root_folder <- as.character(myArgs[1]) # 'C:/MyApps'
-db_env <- myArgs[3] # test or prod
+root_folder <- 'C:/MyApps' #as.character(myArgs[1]) # 'C:/MyApps'
+db_env <- 'production' #myArgs[3] # test or production
 
 # Set the working directory
 setwd(paste0(root_folder, '/dapTbElectricDublinBus/_pipeline'))
@@ -66,11 +66,13 @@ for (week in sequence(53)){
     n <- length(sample_temp)
     sample_sd <- sd(sample_temp, na.rm = TRUE)
     sample_mean <- mean(sample_temp, na.rm = TRUE)
+    sample_median <- mean(sample_temp, na.rm = TRUE)
     t_crit <- T_CRIT 
     sample_se <- sample_sd / sqrt(n)
     CI_lower <- sample_mean - (t_crit * sample_se) # Confidence intervals for the mean
     CI_upper <- sample_mean + (t_crit * sample_se)
-    
+    p90 <- quantile(sample_temp, .10)
+    sort(rev(sample_temp))
     # Sampling with replacement
     # Comparison with central limit approach
     # N = 10000
@@ -88,6 +90,7 @@ for (week in sequence(53)){
       week = select_week,
       hr = select_hr,
       min_degC = min(sample_temp),
+      p90_degC = p90,
       #min_degC_cl = round(sample_temp_rep_lo, 2),
       ci_lower_degC = round(CI_lower, 2),
       mean_degC = round(sample_mean, 2),

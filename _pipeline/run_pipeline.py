@@ -9,7 +9,7 @@ import importlib.util
 root_folder = ['C:/MyApps'] # Only change if you clone he repo to a different location
 n = ['5'] # The number of routes to process, use 196 for all routes (for Dublin 6th April) 
 # but this could take several hrs to run. 
-env = ['test'] # 'test' or 'prod' - Determines which SQL DB to interact with
+env = ['test'] # 'test' or 'production' - Determines which SQL DB to interact with
 
 # Define Local Rscript location
 # NOTE: Change to suit your local configuration 

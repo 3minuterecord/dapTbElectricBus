@@ -81,6 +81,7 @@ shinyServer(function(input, output, session) {
   getStopNames <- reactive({
     query <- "SELECT stop_id, stop_name FROM stops"
     data <- getDbData(query, conPool)
+    data$stop_name <- iconv(data$stop_name, "latin1", "ASCII", sub = "")
     return(data)
   })
   
@@ -169,7 +170,6 @@ shinyServer(function(input, output, session) {
       dead_shapes_reactive$stats <- NULL
       dead_routes <- NULL
     }
-    
     return(dead_routes)
   }
   
@@ -508,11 +508,13 @@ shinyServer(function(input, output, session) {
       rename(from_stop = 'stop_name.x') %>%
       rename(to_stop = 'stop_name.y')
     
+    table_height <- ifelse(nrow(data) > 5, 190, 'auto')
+    
     reactable(
       data,
       filterable = FALSE,
       pagination = FALSE,
-      height = 190,
+      height = table_height,
       resizable = TRUE,
       bordered = TRUE,
       highlight = TRUE,

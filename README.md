@@ -2,8 +2,11 @@
 
 Visualization of factors affecting the feasibility of transitioning the Dublin Bus network to electric buses.
 
-**App** (under development)  
+**App** (production - full data set)  
 https://orb10x.shinyapps.io/dapTbElectricBus/
+
+**App** (test)  
+https://orb10x.shinyapps.io/dapTbElectricBusTest/
   
 ![](app/www/screen1.png)
 ![](app/www/screen2.png)

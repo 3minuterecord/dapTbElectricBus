@@ -2,10 +2,14 @@
 
 Visualization of factors affecting the feasibility of transitioning the Dublin Bus network to electric buses.
 
-**App** (under development)  
+**App** (production - full data set)  
 https://orb10x.shinyapps.io/dapTbElectricBus/
+
+**App** (test)  
+https://orb10x.shinyapps.io/dapTbElectricBusTest/
   
 ![](app/www/screen1.PNG)
+![](app/www/screen2.png)
   
 #### GTFS Ingestion & Processing Steps
 
@@ -20,8 +24,9 @@ https://orb10x.shinyapps.io/dapTbElectricBus/
 9. Save log of post_ids for routes & applicable dead trips to Azure SQL db.
 10. Extract raw route data from Azure Cosmos db & transform to table of total distance, total time & coords.
 11. Get elevation data for all trips (GTFS & dead) from Open Elevation API.
-11. Save transformed dead trip & elevation data to Azure SQL db.  
-12. Visualize data in R Shiny.
+12. Get statistical ambient temperature data for Dublin (hourly means for each week of the year).
+13. Save transformed dead trip & elevation data to Azure SQL db.  
+14. Visualize data in R Shiny.
 
   
 #### GTFS General Notes

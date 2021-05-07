@@ -9,7 +9,7 @@ import importlib.util
 root_folder = ['C:/MyApps'] # Only change if you clone he repo to a different location
 n = ['5'] # The number of routes to process, use 196 for all routes (for Dublin 6th April) 
 # but this could take several hrs to run. 
-env = ['test'] # 'test' or 'prod' - Determines which SQL DB to interact with
+env = ['test'] # 'test' or 'production' - Determines which SQL DB to interact with
 
 # Define Local Rscript location
 # NOTE: Change to suit your local configuration 
@@ -121,6 +121,7 @@ else :
     functs.createIndex(col = 'route_id', table = 'distances', connection = conn,  curs = conn.cursor())
     functs.createIndex(col = 'service_id', table = 'distances', connection = conn,  curs = conn.cursor())
     functs.createIndex(col = 'quasi_block', table = 'distances', connection = conn,  curs = conn.cursor())
+    functs.createIndex(col = 'stop', table = 'distances', connection = conn,  curs = conn.cursor())    
 
     # STEP 6 - COLLECT ELEVATION DATA
     # ====================================
@@ -129,6 +130,8 @@ else :
     import CollectStopElevations
     print('Step 6: Gather elevations as part of Step 6...')
     CollectStopElevations.collectStopElevations()
+    functs.createIndex(col = 'latitude', table = 'stopElevations', connection = conn,  curs = conn.cursor())    
+    functs.createIndex(col = 'longitude', table = 'stopElevations', connection = conn,  curs = conn.cursor())    
     
     # STEP 7 - CREATE TEMPERATURE STATS
     # =================================

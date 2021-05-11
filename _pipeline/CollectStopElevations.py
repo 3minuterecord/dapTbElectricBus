@@ -21,7 +21,7 @@ def collectStopElevations():
     #===========================================================================
     # 1. Create Request Batches
     #===========================================================================
-    # A. Collect all items in the 'stops' schema of the shared team Database.
+    # A. Collect all items in the 'stops' and  'depots' schemata from the shared team Database.
     # B. Reduce Dataframe by removing dupicate coordinates.
     # C. Pop() coordinates based on batch sizes no greater than 9700 bytes.
     # D. Add each coordinate to a list of batches to send the the Open-elevations API
@@ -36,11 +36,14 @@ def collectStopElevations():
     batches = {"locations" : []}
     try:
         rawShapedf = AzurePackage("SelectAllData", "stops")
+        rawDepotdf = AzurePackage("SelectAllData", "depots")
+        rawDepotdf.columns = ["stop_id","stop_lat","stop_lon"]
         shapesDF = rawShapedf[["stop_id", "stop_lat","stop_lon"]]
         shapesRequest = shapesDF.drop_duplicates(subset=None, 
                                                 keep='first', 
                                                 inplace=False)
-        shapesCoordinates = Url("generateLocationRequest", shapesRequest)
+        allStops = pd.concat([shapesRequest,rawDepotdf], axis=0).reset_index(drop=True)
+        shapesCoordinates = Url("generateLocationRequest", allStops)
         for key, value in shapesCoordinates.items():
             if key == "locations":
                 locations = value
@@ -93,16 +96,16 @@ def collectStopElevations():
     Iteration = 0
     try:
         for each in listOfBatches:
-                attempts = 0
-                while attempts < 5:
-                    try:
-                        ListOfDicts.append(Url("mineElevationData",each))
-                        break
-                    except urllib.error.HTTPError:
-                        attempts = attempts+1
-                Iteration = Iteration + 1
-                print(f"Elevation {Iteration} Collected")
-                time.sleep(2)
+            attempts = 0
+            while attempts < 5:
+                try:
+                    ListOfDicts.append(Url("mineElevationData",each))
+                    break
+                except urllib.error.HTTPError:
+                    attempts = attempts+1
+            Iteration = Iteration + 1
+            print(f"Elevation {Iteration} Collected")
+            time.sleep(2)
         for each in ListOfDicts:
             for key, value in each.items():
                 if type(value) is list:

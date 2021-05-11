@@ -1,5 +1,12 @@
-# Create blocks & identify dead trips & legs
-# ==========================================
+# Create temperature stats
+# ========================
+
+# This script takes the 30-year (hourly) Dublin temperature data set and 
+# calculates summary stats for each hour of the day for each week of the year.
+# - Mean ambient temperature for each hour of each week
+# - 95% CI for this mean
+# - p90 value for the sample data
+# - sample min and max
 
 # Fetch command line arguments
 myArgs <- commandArgs(trailingOnly = TRUE)
@@ -73,7 +80,9 @@ for (week in sequence(53)){
     CI_upper <- sample_mean + (t_crit * sample_se)
     p90 <- quantile(sample_temp, .10)
     sort(rev(sample_temp))
-    # Sampling with replacement
+    
+    # Sampling with replacement check
+    # ===============================
     # Comparison with central limit approach
     # N = 10000
     # sample_temp_rep_means <- c()
@@ -86,6 +95,7 @@ for (week in sequence(53)){
     # sample_temp_rep_lo <- sample_temp_rep_mean - (1.97 * sample_temp_rep_sd)
     # sample_temp_rep_hi <- sample_temp_rep_mean + (1.97 * sample_temp_rep_sd)
     
+    # Output the stats to a dataframe
     temperature_stats_add <- data.frame(
       week = select_week,
       hr = select_hr,
@@ -98,6 +108,7 @@ for (week in sequence(53)){
       #max_degC_cl = round(sample_temp_rep_hi, 2),
       max_degC = max(sample_temp)
     )
+    # Bind this to the previous stats
     temperature_stats <- rbind(temperature_stats, temperature_stats_add)
   }
 }
@@ -105,6 +116,7 @@ for (week in sequence(53)){
 # Create database connection pool
 conPool <- getDbPool(DATABASE)
 
+# Save to the database
 saveByChunk(
   chunk_size = 5000, 
   dat = temperature_stats, 

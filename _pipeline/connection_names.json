@@ -1,0 +1,5 @@
+{"sql_server":"tcp:electricbus.database.windows.net",
+"sql_database":"electricbus-eastus-",
+"sql_user":"teamadmin",
+"sql_port":"1433"
+}

@@ -207,12 +207,19 @@ shinyServer(function(input, output, session) {
     }
   }
   
-  temperatureData <- reactive({
-    week <- lubridate::isoweek(input$week_selector)
-    query <- paste0("SELECT * FROM temperature_stats WHERE week = ", week)
-    data <- getDbData(query, conPool) %>% arrange(hr)
-    return(data)
-  })
+  #temperatureData <- reactive({
+  #  week <- lubridate::isoweek(input$week_selector)
+  #  query <- paste0("SELECT * FROM temperature_stats WHERE week = ", week)
+  #  data <- getDbData(query, conPool) %>% arrange(hr)
+  #  return(data)
+  #})
+  library(plotly)
+  tempFig <- function(){
+    fig_json <- system2("python", args = "../_pipeline/temperature_graph.py")
+    temperature_fig -> plotly:::from_JSON()
+    return(temperature_fig)
+  }
+  
   
   # Route selector UI element
   output$showRouteSelector <- renderUI({

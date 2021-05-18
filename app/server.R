@@ -213,6 +213,7 @@ shinyServer(function(input, output, session) {
   #  data <- getDbData(query, conPool) %>% arrange(hr)
   #  return(data)
   #})
+  
   library(plotly)
   tempFig <- function(){
     fig_json <- system2("python", args = "../_pipeline/temperature_graph.py")
@@ -425,7 +426,7 @@ shinyServer(function(input, output, session) {
       div(plotlyOutput('elevationPlot', height = 200), style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;'),
       div(uiOutput('week_slider')),
       div(uiOutput('showTemperaturePlotNotes'), style = 'margin-left: 30px; margin-right: 50px;  margin-top: 20px;'),
-      div(plotlyOutput('temperaturePlot', height = 200), style = 'margin-left: 40px; margin-right: 50px;  margin-top: 27px;')
+      div(plotlyOutput('tempFig', height = 200), style = 'margin-left: 40px; margin-right: 50px;  margin-top: 27px;')
     )
   })
   
